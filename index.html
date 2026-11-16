@@ -113,13 +113,15 @@ textarea{resize:vertical;min-height:70px}
 <section class="col left">
 
   <div class="sec">
-    <h2><span><span class="n">01</span>Your prompt</span><span class="chips" id="examples" style="text-transform:none;letter-spacing:0"></span></h2>
+    <h2><span><span class="n">01</span>Your prompt</span><span class="chips" id="autoNote" style="text-transform:none;letter-spacing:0"></span></h2>
     <textarea id="raw" placeholder="Write it the way you normally would. e.g. 'Write a white paper on why operators should treat AI-RAN as an energy play first, for CTOs at Tier-1 carriers.'"></textarea>
     <div class="analysis" id="analysis"></div>
+    <div class="analysis" id="intelBox"></div>
   </div>
 
   <div class="sec">
     <h2><span><span class="n">02</span>What are you building?</span></h2>
+    <div class="note" style="margin:-4px 0 10px">The app picks the best fit as you type. Tap any card to choose it yourself.</div>
     <div class="typegrid" id="types"></div>
     <div id="genPanel" class="hidden" style="margin-top:12px">
       <div class="note" style="margin-bottom:4px">General mode reads your prompt, works out the domain and the kind of task, and builds the loop around them. Override if it guesses wrong.</div>
@@ -227,8 +229,9 @@ textarea{resize:vertical;min-height:70px}
 
   <div class="sec">
     <h2><span><span class="n">05</span>Guardrails</span></h2>
+    <label class="toggle"><input type="checkbox" id="optEI" checked><div><b>Enhanced Intelligence</b><span>On: the AI fills data gaps itself with expert estimates, benchmarks and reasoned assumptions, so the output is complete with no [DATA NEEDED] blanks. Off: gaps are left as [DATA NEEDED] fields for you to fill.</span></div></label>
     <label class="toggle"><input type="checkbox" id="optHuman" checked><div><b>Human voice rules</b><span>Bans AI vocabulary and sentence tics, forces varied rhythm and specific detail.</span></div></label>
-    <label class="toggle"><input type="checkbox" id="optEvidence" checked><div><b>Evidence discipline</b><span>No invented numbers, quotes or sources. Gaps are flagged for you to fill.</span></div></label>
+    <label class="toggle"><input type="checkbox" id="optEvidence" checked><div><b>Evidence discipline</b><span>No invented quotes, sources or client results. Facts, estimates and opinions kept clearly apart.</span></div></label>
     <label class="toggle"><input type="checkbox" id="optThink" checked><div><b>Think before writing</b><span>Governing thought, issue tree and skeleton before any prose.</span></div></label>
     <label class="toggle"><input type="checkbox" id="optVisual" checked><div><b>Exhibits and visuals</b><span>Specifies charts, tables and diagrams with the takeaway each must show.</span></div></label>
     <label class="toggle"><input type="checkbox" id="optAsk"><div><b>Ask me questions first</b><span>Up to 5 sharp questions before drafting. Off = states assumptions and proceeds.</span></div></label>
@@ -917,6 +920,45 @@ const GENERIC_TASK = {name:"General task", role:"known for work that is clear, c
   techniques:["Answer the actual question first","Use the most useful format, not the most elaborate","Add the insight an expert would add"],
   anti:["Padding","Generic advice","Over-formatting"], extra:[], format:"Whatever form best serves the request; if the brief specifies a format, follow it exactly."};
 
+/* ============================================================
+   ENHANCED INTELLIGENCE: read topic, reader and key terms from the prompt
+   ============================================================ */
+const STOP = new Set("a an the and or of to in on for with about into from by at as is are be this that these those my our your their it its me we us i you please can could would should will help want need some any very more most also just using use make create write build develop draft prepare give generate produce design explain summarise summarize analyse analyze plan suggest provide come up new good best great detailed short long quick simple".split(" "));
+const DELIV = /\b(white ?paper|point of view|thought leadership( piece)?|powerpoint|ppt|slide deck|deck|slides?|presentation|storyline|framework|approach|methodology|business case|strategy( document| paper)?|roadmap|proposal|rfp (response|summary)|rfp|memo|executive brief|briefing note|one[- ]pager|architecture document|report|article|blog post|post|essay|email|document|doc|paper|summary|plan)\b/gi;
+const ROLE_WORDS = "ctos?|cfos?|ceos?|cios?|coos?|cmos?|executives?|exec team|leadership( team)?|board( members)?|investors?|directors?|vps?|managers?|leaders?|engineers?|architects?|developers?|analysts?|clients?|customers?|buyers?|students?|learners?|beginners?|operators?|carriers?|stakeholders?|sponsors?|committee|team|staff|employees|readers?|audience|partners?|regulators?|recruiters?|hiring managers?";
+function cleanSpaces(s){ return s.replace(/\s+/g," ").replace(/^[\s,.;:-]+|[\s,.;:-]+$/g,""); }
+function extractIntel(raw){
+  const txt = (raw||"").replace(/["“”]/g,"").trim();
+  if(!txt) return {topic:"", reader:"", terms:[], numbers:[]};
+  const RW = `(?:${ROLE_WORDS})`;
+  const END = `(?=\\s*(?:$|[.,;:!?)]|\\s(?:at|in|of|from|across|within|who|to|on|about|with|so|that|because)\\b))`;
+  let reader = "", readerSpan = "";
+  // 1) "for/to/aimed at <...roles, and roles> [at/in org]"
+  let rm = txt.match(new RegExp(`\\b(?:for|to|aimed at|targeting|audience:?)\\s+((?:the |our |my |a |an |\\d+ )?(?:[\\w-]+\\s){0,4}?${RW}(?:(?:,|\\s+and|\\s+&|\\s+or)\\s+(?:[\\w-]+\\s){0,3}?${RW})*${END}(?:\\s+(?:at|in|of|from|across|within)\\s+[^.,;:\\n]{2,60})?)`, "i"));
+  if(rm){ reader = rm[1]; readerSpan = rm[0]; }
+  // 2) "<steering committee|board|leadership team> deck/update/paper"
+  if(!reader){ const m2 = txt.match(/\b(steering committee|steerco|board(?: of directors)?|exec(?:utive)? (?:team|committee)|leadership team|investment committee)\b(?=\s+(?:deck|presentation|update|paper|memo|report|briefing|pack|meeting))/i); if(m2){ reader = m2[1]; readerSpan = m2[1]; } }
+  reader = cleanSpaces(reader);
+  // topic
+  let t = txt.split(/(?<=[.!])\s|\n/)[0];
+  if(readerSpan) t = t.replace(readerSpan, " ");
+  t = t.replace(/^(please\s+|can you\s+|could you\s+|i (want|need) (you )?to\s+|help me( to)?\s+|i'?d like( you)?( to)?\s+)*/i,"");
+  const isQ = /^(how|what|why|which|when|where|should|can|could|is|are|do|does|will)\b/i.test(t);
+  if(!isQ){
+    t = t.replace(/^(write|create|build|develop|draft|make|prepare|give me|generate|produce|design|summari[sz]e|analy[sz]e|plan|suggest|come up with|put together|outline|review|assess|compare|tell me about|explain)\s+(me\s+)?/i,"")
+         .replace(/^(a|an|the|some|my|our)\s+/i,"")
+         .replace(DELIV," ")
+         .replace(/^\s*(?:(?:on|about|regarding|covering|around|arguing|recommending|explaining|showing|describing|proposing|that|we|which|of|for|with|to)\b\s*)+/i,"")
+         .replace(/^\s*(the|a|an)\s+/i,"");
+  }
+  t = cleanSpaces(t.replace(/\?+$/,"")).split(/\s+/).slice(0,20).join(" ");
+  const roleRe = new RegExp(`^${RW}$`,"i");
+  const terms = [...new Set((txt.match(/\b([A-Z][A-Za-z0-9]*[A-Z0-9][A-Za-z0-9-]*|[A-Za-z]*[A-Z0-9][A-Za-z0-9]*-[A-Za-z0-9-]+|[A-Za-z]+-[A-Z0-9][A-Za-z0-9-]*|[A-Z][a-z]{2,}(?:\s[A-Z][a-z]{2,})+)\b/g)||[])
+      .filter(w=>!/^(I|A|The|My|Our|Please|Write|Create|Build|Develop|Make|Help|Plan|Explain|Give)$/.test(w) && !roleRe.test(w)))].slice(0,8);
+  const numbers = [...new Set(txt.match(/\b\d[\d,.]*(?:-day|-week|-month|-year)?\s?(?:%|percent|months?|years?|weeks?|days?|slides?|pages?|words?|k\b|m\b|bn|million|billion|sites?|users?|customers?|people)?/gi)||[])].map(s=>s.trim()).filter(s=>s.length>1).slice(0,6);
+  return {topic:t, reader, terms, numbers};
+}
+
 function scoreRe(re, txt){ const m = txt.match(re); return m ? m.length : 0; }
 function detectGeneral(txt){
   const all = (txt||"");
@@ -938,7 +980,9 @@ function makeGeneral(raw){
   return {
     label: tk===GENERIC_TASK ? "Response" : tk.name, general:true, g,
     sizes: TYPES.general.sizes,
-    persona: (tk===TASKS.code && d!==DOMAINS.software)
+    persona: (d===GENERIC_DOMAIN && $("optEI").checked && extractIntel(raw).topic)
+      ? `a recognised senior practitioner with long hands-on experience in exactly this area (${extractIntel(raw).topic}). You are ${tk.role}`
+      : (tk===TASKS.code && d!==DOMAINS.software)
       ? `${DOMAINS.software.persona}, who also has real working knowledge of ${d===GENERIC_DOMAIN?"the subject of the brief":d.name.toLowerCase()}`
       : `${d.persona}${g.d2?`, with working knowledge of ${g.d2.name.toLowerCase()}`:""}. You are ${tk.role}`,
     blueprint: tk.blueprint, techniques: tk.techniques, anti: tk.anti,
@@ -959,7 +1003,7 @@ function renderTypes(){
   const ents = [...ORDER.filter(k=>TYPES[k]).map(k=>[k,TYPES[k]]), ...Object.entries(TYPES).filter(([k])=>!ORDER.includes(k))];
   $("types").innerHTML = ents.map(([k,v]) =>
     `<div class="tcard ${k===state.type?'on':''}" data-k="${k}"><b>${v.label}</b><i>${v.hint}</i></div>`).join("");
-  $("types").querySelectorAll(".tcard").forEach(el => el.onclick = () => setType(el.dataset.k));
+  $("types").querySelectorAll(".tcard").forEach(el => el.onclick = () => { state.manualType = true; setType(el.dataset.k); renderAutoNote(); });
 }
 function setType(k, keepLenses){
   state.type = k;
@@ -991,22 +1035,30 @@ $("modeChips").querySelectorAll(".chip").forEach(el => el.onclick = () => {
   $("modeChips").querySelectorAll(".chip").forEach(c=>c.classList.toggle("on", c===el));
 });
 $("rounds").oninput = renderPlan;
+$("optEI").addEventListener("change", renderIntel);
 $("audience").onchange = () => $("audienceCustom").classList.toggle("hidden", $("audience").value!=="custom");
 
-$("examples").innerHTML = EXAMPLES.map((e,i)=>`<span class="chip sm" data-i="${i}">${e.t}</span>`).join("");
-$("examples").querySelectorAll(".chip").forEach(el => el.onclick = () => {
-  const e = EXAMPLES[+el.dataset.i];
-  $("raw").value = e.p; $("audience").value = e.aud; $("industry").value = e.ind;
-  $("audienceCustom").classList.add("hidden");
-  setType(e.type); analyse();
-});
+/* example chips removed in v3 */
 
 /* ---------- General-mode selectors ---------- */
 $("gDomain").innerHTML = `<option value="auto">Auto-detect</option>` + Object.entries(DOMAINS).map(([k,d])=>`<option value="${k}">${d.name}</option>`).join("") + `<option value="none">General / other</option>`;
 $("gTask").innerHTML = `<option value="auto">Auto-detect</option>` + Object.entries(TASKS).map(([k,d])=>`<option value="${k}">${d.name}</option>`).join("") + `<option value="none">General / other</option>`;
 $("gDomain").onchange = $("gTask").onchange = () => analyse();
 ["audience","purpose","voice"].forEach(i=>$(i).addEventListener("change",()=>{ $(i).dataset.touched="1"; }));
+function renderIntel(){
+  const box=$("intelBox"); if(!box) return;
+  const raw=$("raw").value.trim();
+  if(!$("optEI").checked || !raw){ box.innerHTML=""; return; }
+  const i=extractIntel(raw);
+  box.innerHTML = [
+    i.topic?`<span class="flag ok">Topic: ${esc(i.topic)}</span>`:"",
+    i.reader?`<span class="flag ok">Reader: ${esc(i.reader)}</span>`:`<span class="flag">Reader: AI will define a specific one</span>`,
+    i.terms.length?`<span class="flag tip">Key terms: ${esc(i.terms.join(", "))}</span>`:"",
+    `<span class="flag tip">Expert identity calibrated in Phase 0</span>`
+  ].join("");
+}
 function renderDetected(){
+  renderIntel();
   if(state.type!=="general") return;
   const raw=$("raw").value.trim(), box=$("detected");
   if(!raw){ box.innerHTML=`<span class="flag">Start typing and the domain and task will show here</span>`; return; }
@@ -1028,15 +1080,29 @@ const DETECT = [
   ["projectreport",/\b(project (report|status)|status report|closure report|progress report|rag status|weekly status|monthly report)\b/i],
   ["deck",/\b(deck|slides?|powerpoint|ppt|presentation|steerco|steering committee)\b/i],
   ["whitepaper",/\bwhite ?paper\b/i],
-  ["framework",/\b(framework|maturity model|model to assess|assessment model)\b/i],
-  ["approach",/\b(approach|methodology|delivery plan|engagement plan)\b/i],
-  ["business",/\b(business case|roi|investment case|cost[- ]benefit)\b/i],
-  ["strategy",/\b(strategy|roadmap)\b/i],
-  ["proposal",/\b(proposal|rfp|rfi|bid|tender)\b/i],
+  ["framework",/\b(maturity model|assessment model|model to assess|((develop|build|create|design|propose|define)\b.{0,40}\bframework)|framework (for|to) (assess|evaluate|measure|classify|prioriti[sz]e|decide|govern))\b/i],
+  ["approach",/\b(methodology|delivery approach|engagement approach|implementation approach|approach (document|section|for (the|our|this) (engagement|program|programme|project|rfp))|delivery plan|engagement plan)\b/i],
+  ["business",/\b(business case|roi case|investment case|cost[- ]benefit|payback analysis)\b/i],
+  ["strategy",/\b(roadmap|strategy (document|paper|deck)|strategic plan|((develop|build|create|write|define)\b.{0,30}\bstrategy))\b/i],
+  ["proposal",/\b(proposal|rfp response|respond to (the|this|an|a) (rfp|rfi|tender)|tender response|bid response)\b/i],
   ["memo",/\b(memo|executive brief|briefing note|one[- ]pager)\b/i],
   ["architecture",/\b(architecture|solution design|hld|lld)\b/i],
-  ["pov",/\b(point of view|pov|thought leadership|op-?ed|article|perspective)\b/i]
+  ["pov",/\b(point of view|pov|thought leadership|op-?ed)\b/i]
 ];
+function bestType(txt){ const d = DETECT.find(([,re])=>re.test(txt)); return d ? d[0] : "general"; }
+function autoSelect(){
+  const txt = $("raw").value.trim();
+  if(!state.manualType && txt){ const b = bestType(txt); if(b!==state.type) setType(b); }
+  renderAutoNote();
+}
+function renderAutoNote(){
+  const n=$("autoNote"); if(!n) return;
+  if(!$("raw").value.trim()){ n.innerHTML=""; return; }
+  n.innerHTML = state.manualType
+    ? `<span class="chip sm" id="reAuto" title="Let the app pick the best option again">↺ Auto-select</span>`
+    : `<span class="flag ok" style="font-size:11px">Auto: ${TYPES[state.type].label}</span>`;
+  const r=$("reAuto"); if(r) r.onclick=()=>{ state.manualType=false; autoSelect(); };
+}
 function analyse(){
   const txt = $("raw").value.trim(); const box = $("analysis");
   renderDetected();
@@ -1044,16 +1110,16 @@ function analyse(){
   const f = [];
   const words = txt.split(/\s+/).length;
   const det = DETECT.find(([,re])=>re.test(txt));
-  if(det && det[0]!==state.type) f.push(`<span class="flag tip" style="cursor:pointer" data-sw="${det[0]}">Looks like ${/^[aeiour]/i.test(TYPES[det[0]].label)?"an":"a"} ${TYPES[det[0]].label}. Switch?</span>`);
+  if(det && det[0]!==state.type && state.manualType) f.push(`<span class="flag tip" style="cursor:pointer" data-sw="${det[0]}">Looks like ${/^[aeiour]/i.test(TYPES[det[0]].label)?"an":"a"} ${TYPES[det[0]].label}. Switch?</span>`);
   else if(det) f.push(`<span class="flag ok">✓ Deliverable clear</span>`);
   f.push(/\b(for|audiences?|readers?|cto|cfo|ceo|cio|board|executives?|vp|directors?|teams?|stakeholders?|operators?|clients?|committee|sponsors?|leadership|investors?|engineers?|architects?)\b/i.test(txt) ? `<span class="flag ok">✓ Audience</span>` : (state.type==="general"&&$("audience").value==="auto" ? `<span class="flag">Audience: will be inferred</span>` : `<span class="flag gap">No audience: set it in 03</span>`));
   f.push(/\b(recommend|argu|convinc|decid|decision|approv|justif|why\b|should\b|propos|case for|make the case)/i.test(txt) ? `<span class="flag ok">✓ Has a stance</span>` : (state.type==="general" ? `<span class="flag">Goal: inferred in Phase 0</span>` : `<span class="flag gap">No stance yet: the loop will force one</span>`));
   f.push(/\d/.test(txt) || $("context").value.trim().length>40 ? `<span class="flag ok">✓ Specifics</span>` : `<span class="flag gap">No numbers or facts: add some in 03</span>`);
   if(words<12) f.push(`<span class="flag gap">Very short (${words} words)</span>`);
   box.innerHTML = f.join("");
-  box.querySelectorAll("[data-sw]").forEach(el=>el.onclick=()=>{ setType(el.dataset.sw); analyse(); });
+  box.querySelectorAll("[data-sw]").forEach(el=>el.onclick=()=>{ state.manualType=false; setType(el.dataset.sw); renderAutoNote(); });
 }
-$("raw").addEventListener("input", analyse);
+let _at; $("raw").addEventListener("input", ()=>{ clearTimeout(_at); _at=setTimeout(autoSelect,350); analyse(); });
 $("context").addEventListener("input", analyse);
 
 /* ============================================================
@@ -1064,9 +1130,10 @@ function build(){
   const t = state.type==="general" ? makeGeneral(raw) : TYPES[state.type];
   const size = t.sizes[+$("size").value];
   const audKey = $("audience").value;
-  const audience = audKey==="auto" ? "Not specified. Infer the most likely reader from the brief and domain, and state who you assumed in Phase 0" : audKey==="custom" ? ($("audienceCustom").value.trim() || "the reader described in the brief") : AUDIENCES[audKey];
+  const _ei = $("optEI").checked, intel = extractIntel(raw);
+  const audience = (_ei && intel.reader && audKey!=="custom" && !$("audience").dataset.touched) ? `${intel.reader} (from the brief)${audKey!=="auto"?`. Profile: ${AUDIENCES[audKey]}`:""}` : audKey==="auto" ? (intel.reader ? `${intel.reader} (from the brief)` : _ei ? "Not stated. Define the most specific likely reader (role, seniority, type of organisation, what they already know and what they need to decide) and write for that person" : "Not specified. Infer the most likely reader from the brief and domain, and state who you assumed in Phase 0") : audKey==="custom" ? ($("audienceCustom").value.trim() || "the reader described in the brief") : AUDIENCES[audKey];
   const industry = $("industry").value.trim() || (t.general && t.g.d!==GENERIC_DOMAIN ? t.g.d.name + (t.g.d2?` (with ${t.g.d2.name.toLowerCase()})`:"") : "");
-  const purpose = $("purpose").value==="auto" ? "Infer the real goal behind the request and what a great result would let me do; state it in Phase 0" : PURPOSES[$("purpose").value];
+  const purpose = $("purpose").value==="auto" ? (_ei ? "Define the specific outcome a great result produces for the reader (a decision, an action, a changed view, working code) and the observable signs it worked; state it in Phase 0" : "Infer the real goal behind the request and what a great result would let me do; state it in Phase 0") : PURPOSES[$("purpose").value];
   const voice = $("voice").value==="auto" ? (t.isCode ? "Clear, precise and plain. Explanations short and practical, aimed at someone who will run and maintain the code." : `Sound like ${t.general?t.g.d.persona:t.persona} would sound talking to a respected peer: direct, specific, confident where the evidence supports it, plain about uncertainty.`) : VOICES[$("voice").value];
   const spelling = $("spelling").value;
   const context = $("context").value.trim();
@@ -1076,7 +1143,7 @@ function build(){
   const lenses = [...state.lenses].map(k=>LENSES[k]);
   if(t.general && t.domainLens && !lenses.some(l=>l.name===t.domainLens.name)) lenses.unshift(t.domainLens);
   const o = { human:$("optHuman").checked, evidence:$("optEvidence").checked, think:$("optThink").checked,
-              visual:$("optVisual").checked, ask:$("optAsk").checked, notes:$("optNotes").checked && ["deck","consulting"].includes(state.type) };
+              visual:$("optVisual").checked, ask:$("optAsk").checked, ei:$("optEI").checked, notes:$("optNotes").checked && ["deck","consulting"].includes(state.type) };
 
   const L = [];
   function art(w){ return /^[aeiou]/i.test(w)?'an':'a'; }
@@ -1089,6 +1156,7 @@ function build(){
   H("1. ROLE");
   if(t.general) P(`You are ${t.persona}. You know what serious practitioners in this area care about: ${t.g.d.care}.`);
   else P(`You are ${t.persona}.${industry?` You have deep, current, hands-on knowledge of ${industry}: its economics, its technology, its standards bodies, its vocabulary and what its senior people worry about.`:""}`);
+  if(_ei && intel.topic) P(`This task is about: ${intel.topic}. You have done this exact kind of work many times, and you know what separates a credible answer from a generic one.${intel.terms.length?` You use ${intel.terms.join(", ")} with correct, current meaning and know the details a practitioner would check.`:""}`);
   P(t.isCode ? `You work like a senior engineer, not like an autocomplete. Your work is judged on whether it runs, handles the hard cases, and could be maintained by someone else.` : `You write like a senior human expert, not like an AI assistant. Your work is judged on whether a demanding reader would believe a respected practitioner wrote it.`);
 
   H("2. THE BRIEF");
@@ -1097,6 +1165,8 @@ function build(){
   P(`Primary reader: ${audience}`);
   if(industry) P(`Industry / domain: ${industry}`);
   P(`Purpose: ${purpose}`);
+  if(_ei && intel.topic) P(`Core subject: ${intel.topic}`);
+  if(_ei && (intel.terms.length||intel.numbers.length)) P(`Specifics in the brief to build around: ${[...intel.terms,...intel.numbers].join(" · ")}`);
   if(must) P(`Must include: ${must}`);
   if(avoid) P(`Must avoid: ${avoid}`);
   P(`Language: ${spelling} English spelling and conventions.`);
@@ -1107,6 +1177,14 @@ function build(){
   P(`Write in the first person plural ("we") where a firm or team is speaking, otherwise direct and impersonal. Never address the reader as "you" in a salesy way.`);
 
   H("4. PHASE 0 — INTAKE");
+  if(_ei){
+    P(`Step 1, expert calibration. Before anything else, write 3–4 lines that define the exact expert best placed to produce this, and then work as that person throughout:`);
+    P(`- Job title, seniority and sector (e.g. "Principal RAN architect, 18 years at Tier-1 mobile operators", never "a senior expert")`);
+    P(`- The specific projects, decisions or problems they have owned that are relevant here`);
+    P(`- The frameworks, standards, methods, tools and data sources they would rely on for this exact brief, named precisely`);
+    P(`- The 3 things this expert knows about this subject that a generalist would get wrong`);
+    P(`Step 2, domain grounding. List the 5–8 domain-specific facts, benchmarks, terms or constraints this work must reflect to be credible to a practitioner. Use them in the draft.\n`);
+  }
   if(t.general){
     P(`Start with a context read. In 5–7 short lines, state what you understand:`);
     P(`- The real goal behind the request (what a great result lets me do), not just the literal ask`);
@@ -1121,6 +1199,7 @@ function build(){
     P(`After I answer, list the assumptions you are still making, then continue to Phase 1.`);
   } else {
     P(`Do not ask questions. State, in a short list, the 3–6 assumptions you are making about anything the brief leaves open (reader's prior knowledge, the decision at stake, scope boundaries, data available). Choose the assumption that makes the output most useful, then proceed.`);
+    if(o.ei) P(`Use your expert judgement to fill in any context the brief leaves out (scale, timelines, budgets, typical constraints in this domain) rather than leaving it open.`);
   }
 
   if(o.think){
@@ -1131,7 +1210,7 @@ function build(){
       P(`b) Approach: how you will tackle it, and the main alternative you rejected and why.`);
       P(`c) Structure: the parts of the output mapped to the blueprint below.`);
       P(`d) Where this is most likely to go wrong (errors, gaps, generic answers), and how you will prevent it.`);
-      P(`e) Expert edge: the one insight, catch or technique a seasoned ${t.g.d===GENERIC_DOMAIN?"expert":t.g.d.name.toLowerCase()+" practitioner"} would add that a generalist would miss.`);
+      P(`e) Expert edge: the one insight, catch or technique a seasoned ${t.g.d===GENERIC_DOMAIN?(_ei&&intel.topic?"practitioner in this exact area":"expert"):t.g.d.name.toLowerCase()+" practitioner"} would add that a generalist would miss.`);
     } else {
     P(`a) Governing thought: the single sentence the reader must accept by the end. It must be specific and arguable. If a sensible person couldn't disagree with it, sharpen it.`);
     P(`b) SCQA: Situation, Complication, Question, Answer, one line each.`);
@@ -1156,7 +1235,7 @@ function build(){
 
   const sec = o.think?7:6;
   H(`${sec}. PHASE 2 — DRAFT v1`);
-  P(`Write the complete first draft. Full length, full structure, no placeholders except data flags. Do not hold back effort for later rounds.`);
+  P(`Write the complete first draft. Full length, full structure, ${o.ei?"no placeholders or blanks of any kind":"no placeholders except data flags"}. Do not hold back effort for later rounds.`);
 
   H(`${sec+1}. SCORING RUBRIC`);
   P(`Score each dimension 1–10. For each score, quote the weakest passage (or slide title) that justifies it. Be harsh:`);
@@ -1220,8 +1299,14 @@ function build(){
     H(`${sec+(o.human?5:4)}. EVIDENCE RULES`);
     P(`- Never invent statistics, quotes, client names, case studies or sources.`);
     if(t.isCode) P(`- Never invent library functions, parameters or API endpoints. If unsure a function exists in the version used, say so and mark [VERIFY].`);
-    P(`- When a number is needed and you don't have it from my material or reliable knowledge, write [DATA NEEDED: what figure, likely source]. Or give a clearly labelled estimate with the method shown ("Illustrative: 2,000 sites × 3.5 kW × …").`);
-    P(`- Mark anything recalled from memory that I should check with [VERIFY].`);
+    if(o.ei){
+      P(`- Do not leave blanks, gaps or 'data needed' style placeholders. Where a figure, fact or detail is missing, fill it using your best expert judgement, in this order of preference: (1) my material; (2) reliable knowledge you can attribute to a named source; (3) published industry benchmarks or typical ranges; (4) a reasoned estimate built from stated assumptions.`);
+      P(`- Write estimates naturally into the text, in the way a senior expert would ("typically 15–20% for Tier-1 operators", "we assume roughly 2,000 sites"). Use ranges where precision would be false. Keep every estimate realistic and internally consistent across the document.`);
+      P(`- Never fabricate quotes, named client results or citations to specific reports you are not confident exist. Use benchmarks and reasoning instead.`);
+    } else {
+      P(`- When a number is needed and you don't have it from my material or reliable knowledge, write [DATA NEEDED: what figure, likely source]. Or give a clearly labelled estimate with the method shown ("Illustrative: 2,000 sites × 3.5 kW × …").`);
+      P(`- Mark anything recalled from memory that I should check with [VERIFY].`);
+    }
     P(`- Separate fact, estimate and opinion in the wording itself.`);
     P(`- Name standards, frameworks and sources precisely (body, document, year) when you cite them.`);
   }
@@ -1235,7 +1320,7 @@ function build(){
   P(t.format);
   P(`\nAfter the FINAL version, add:`);
   P(`1. Final scores table, with one line on what would push each score higher.`);
-  if(o.evidence) P(`2. Open items: every [DATA NEEDED] and [VERIFY] in one list, so I can close them.`);
+  if(o.evidence) P(o.ei ? `2. Assumptions and estimates: a short table (Item | Value used | Basis: source, benchmark or calculation | Confidence: high/medium/low), so I can check the key figures quickly.` : `2. Open items: every [DATA NEEDED] and [VERIFY] in one list, so I can close them.`);
   P(`${o.evidence?3:2}. The two questions this audience is most likely to ask, with crisp answers.`);
 
   H(`${last+1}. LAST CHECK BEFORE YOU PRINT THE FINAL`);
@@ -1245,12 +1330,14 @@ function build(){
     isDeck(state.type)?"Action titles alone tell the full story":t.general?"The most important point or result comes first":"Section openings alone tell the full story",
     t.isCode?"The code runs as given and handles the edge cases named in Phase 1":"No paragraph could be pasted into a document about a different topic unchanged",
     o.human?"Zero banned words or patterns; sentence lengths visibly vary":"Language is plain and specific",
-    o.evidence?"No invented facts; every gap is flagged":"Claims are supported",
+    o.evidence?(o.ei?"No blanks or placeholders; every estimate is realistic, consistent and listed in the assumptions table":"No invented facts; every gap is flagged"):"Claims are supported",
     "The reader knows exactly what to do or decide next",
     `It fits the size: ${size}`
   ].forEach(x=>P(`[ ] ${x}`));
   P(`\nBegin with Phase 0.`);
-  return L.join("\n");
+  let out = L.join("\n");
+  if(o.ei) out = out.replace(/a \[DATA NEEDED\] flag/g, "a realistic expert estimate (benchmark or reasoned calculation)").replace(/\[DATA NEEDED\]/g, "'Estimate — see assumptions table'");
+  return out;
 }
 
 /* ---------- Render ---------- */
@@ -1298,11 +1385,11 @@ function setHist(h){ memHist=h; try{ localStorage.setItem(KEY, JSON.stringify(h)
 function snapshot(){
   const ids=["raw","size","purpose","audience","audienceCustom","industry","voice","spelling","context","must","avoid","rounds","bar","visibility"];
   const f={}; ids.forEach(i=>f[i]=$(i).value);
-  ["optHuman","optEvidence","optThink","optVisual","optAsk","optNotes"].forEach(i=>f[i]=$(i).checked);
+  ["optEI","optHuman","optEvidence","optThink","optVisual","optAsk","optNotes"].forEach(i=>f[i]=$(i).checked);
   return {f, type:state.type, mode:state.mode, lenses:[...state.lenses], out:lastOutput, at:new Date().toISOString()};
 }
 function restore(s){
-  setType(s.type); state.lenses=new Set(s.lenses); state.mode=s.mode;
+  state.manualType=true; setType(s.type); state.lenses=new Set(s.lenses); state.mode=s.mode;
   Object.entries(s.f).forEach(([k,v])=>{ const el=$(k); if(!el) return; if(typeof v==="boolean") el.checked=v; else el.value=v; });
   $("audienceCustom").classList.toggle("hidden",$("audience").value!=="custom");
   $("modeChips").querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.v===s.mode));
