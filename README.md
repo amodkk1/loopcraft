@@ -1,4 +1,6 @@
-# Amod's LoopCraft
+# Iterum
+
+*Every pass, better than the last.*
 
 Turns a plain prompt into a draft → critique → rewrite loop prompt for white papers, decks, frameworks, RFP summaries, project reports and general tasks.
 
