@@ -52,6 +52,10 @@ textarea{resize:vertical;min-height:70px}
 .tcard b{display:block;font-size:14px}
 .tcard i{font-style:normal;color:var(--muted);font-size:12px;line-height:1.35;display:block;margin-top:2px}
 .tcard:hover{border-color:var(--accent)}
+.tcard.auto{position:relative}
+.tcard.auto::after{content:"AUTO";position:absolute;top:7px;right:8px;font-size:9px;letter-spacing:1px;font-weight:700;color:var(--accent);}
+@keyframes cardflash{0%{box-shadow:0 0 0 0 var(--accent)}100%{box-shadow:0 0 0 10px transparent}}
+.tcard.flash{animation:cardflash .7s ease-out}
 .tcard.on{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent);background:color-mix(in srgb,var(--accent) 10%,var(--panel2))}
 .analysis{margin-top:10px;display:flex;flex-wrap:wrap;gap:6px}
 .flag{font-size:12px;padding:3px 9px;border-radius:6px;border:1px solid var(--line);color:var(--muted)}
@@ -125,7 +129,7 @@ textarea{resize:vertical;min-height:70px}
 
   <div class="sec">
     <h2><span><span class="n">02</span>What are you building?</span></h2>
-    <div class="note" style="margin:-4px 0 10px">The app picks the best fit as you type. Tap any card to choose it yourself.</div>
+    <div class="analysis" id="autoStatus" style="margin:-4px 0 12px"></div>
     <div class="typegrid" id="types"></div>
     <div id="genPanel" class="hidden" style="margin-top:12px">
       <div class="note" style="margin-bottom:4px">General mode reads your prompt, works out the domain and the kind of task, and builds the loop around them. Override if it guesses wrong.</div>
@@ -952,7 +956,7 @@ function extractIntel(raw){
     t = t.replace(/^(write|create|build|develop|draft|make|prepare|give me|generate|produce|design|summari[sz]e|analy[sz]e|plan|suggest|come up with|put together|outline|review|assess|compare|tell me about|explain)\s+(me\s+)?/i,"")
          .replace(/^(a|an|the|some|my|our)\s+/i,"")
          .replace(DELIV," ")
-         .replace(/^\s*(?:(?:on|about|regarding|covering|around|arguing|recommending|explaining|showing|describing|proposing|that|we|which|of|for|with|to)\b\s*)+/i,"")
+         .replace(/^\s*(?:(?:on|about|regarding|covering|around|arguing|recommending|explaining|showing|describing|proposing|that|this|these|those|attached|the attached|we|which|of|for|with|to)\b\s*)+/i,"")
          .replace(/^\s*(the|a|an)\s+/i,"");
   }
   t = cleanSpaces(t.replace(/\?+$/,"")).split(/\s+/).slice(0,20).join(" ");
@@ -1007,7 +1011,7 @@ function renderTypes(){
   const ents = [...ORDER.filter(k=>TYPES[k]).map(k=>[k,TYPES[k]]), ...Object.entries(TYPES).filter(([k])=>!ORDER.includes(k))];
   $("types").innerHTML = ents.map(([k,v]) =>
     `<div class="tcard ${k===state.type?'on':''}" data-k="${k}"><b>${v.label}</b><i>${v.hint}</i></div>`).join("");
-  $("types").querySelectorAll(".tcard").forEach(el => el.onclick = () => { state.manualType = true; setType(el.dataset.k); renderAutoNote(); });
+  $("types").querySelectorAll(".tcard").forEach(el => el.onclick = () => { state.manualType = true; state.lockedOn = bestType($("raw").value.trim()); setType(el.dataset.k); renderAutoNote(); });
 }
 function setType(k, keepLenses){
   state.type = k;
@@ -1019,7 +1023,7 @@ function setType(k, keepLenses){
   if(k==="general"){ ["audience","purpose","voice"].forEach(i=>{ if(!$(i).dataset.touched) $(i).value="auto"; }); }
   else { ["audience","purpose","voice"].forEach(i=>{ if($(i).value==="auto") $(i).value=$(i).options[1].value; }); }
   $("audienceCustom").classList.toggle("hidden", $("audience").value!=="custom");
-  renderTypes(); renderLenses(); analyse();
+  renderTypes(); renderLenses(); analyse(); renderAutoNote();
 }
 function renderLenses(){
   $("lenses").innerHTML = Object.entries(LENSES).map(([k,v]) =>
@@ -1078,34 +1082,55 @@ function renderDetected(){
 
 /* ---------- Prompt analyser ---------- */
 const DETECT = [
-  ["rfpsummary",/\b((summar(y|ise|ize)|digest|analy[sz]e|review|break down).{0,40}\b(rfp|rfi|rfq|tender)|(rfp|rfi|rfq|tender).{0,40}(summar(y|ise|ize)|digest))/i],
-  ["storyline",/\b(storyline|story ?line|ghost deck|slide flow|narrative for (a|the|my) (deck|presentation))\b/i],
-  ["consulting",/\b(consulting (deck|presentation)|client presentation|client-ready (deck|presentation)|partner-level|mckinsey|bcg|bain)\b/i],
-  ["projectreport",/\b(project (report|status)|status report|closure report|progress report|rag status|weekly status|monthly report)\b/i],
-  ["deck",/\b(deck|slides?|powerpoint|ppt|presentation|steerco|steering committee)\b/i],
-  ["whitepaper",/\bwhite ?paper\b/i],
-  ["framework",/\b(maturity model|assessment model|model to assess|((develop|build|create|design|propose|define)\b.{0,40}\bframework)|framework (for|to) (assess|evaluate|measure|classify|prioriti[sz]e|decide|govern))\b/i],
-  ["approach",/\b(methodology|delivery approach|engagement approach|implementation approach|approach (document|section|for (the|our|this) (engagement|program|programme|project|rfp))|delivery plan|engagement plan)\b/i],
-  ["business",/\b(business case|roi case|investment case|cost[- ]benefit|payback analysis)\b/i],
-  ["strategy",/\b(roadmap|strategy (document|paper|deck)|strategic plan|((develop|build|create|write|define)\b.{0,30}\bstrategy))\b/i],
-  ["proposal",/\b(proposal|rfp response|respond to (the|this|an|a) (rfp|rfi|tender)|tender response|bid response)\b/i],
-  ["memo",/\b(memo|executive brief|briefing note|one[- ]pager)\b/i],
-  ["architecture",/\b(architecture|solution design|hld|lld)\b/i],
-  ["pov",/\b(point of view|pov|thought leadership|op-?ed)\b/i]
+  // [type, regex, weight]  higher weight = stronger signal
+  ["rfpsummary",/\b((summar(y|ise|ize)|digest|analy[sz]e|review|break down|key points of|go through)\b.{0,40}\b(rfp|rfi|rfq|tender)|(rfp|rfi|rfq|tender)\b.{0,40}\b(summar(y|ise|ize)|digest|key points))/i,6],
+  ["storyline",/\b(storyline|story ?line|ghost deck|slide flow|deck (outline|structure|narrative)|narrative for (a|the|my) (deck|presentation))\b/i,6],
+  ["consulting",/\b(consulting (deck|presentation)|client[- ](presentation|deck)|client-ready (deck|presentation)|partner-level|mckinsey|bcg|bain)\b/i,6],
+  ["projectreport",/\b(project (report|status|update)|status (report|update)|closure report|close-?out report|progress report|rag status|weekly status|monthly (status|report)|steerco update)\b/i,6],
+  ["proposal",/\b(proposal|rfp response|(respon(se|d)|answer|reply)( to)? (the |this |an |a |our )?(rfp|rfi|rfq|tender)|tender response|bid response|statement of work|sow)\b/i,5],
+  ["whitepaper",/\bwhite ?papers?\b/i,6],
+  ["business",/\b(business case|roi\b|return on investment|investment case|cost[- ]benefit|payback|justify (the |this |an |our )?(investment|spend|budget))/i,5],
+  ["architecture",/\b(architecture (document|doc|design)|solution architecture|reference architecture|target architecture|solution design|technical design|hld|lld|(design|define)\b.{0,30}\barchitecture)\b/i,5],
+  ["framework",/\b(maturity model|assessment model|scoring model|model to (assess|evaluate|score)|((develop|build|create|design|propose|define)\b.{0,40}\bframework)|framework (for|to) (assess|evaluate|measure|classify|prioriti[sz]e|decide|govern|select|score))\b/i,5],
+  ["approach",/\b(methodology|delivery approach|engagement approach|implementation approach|migration approach|(propose|outline|define|describe|write|recommend|draft) (an |the |our |a )?(\w+ )?approach|approach (document|section|to (migrat|implement|deliver|transform|roll|automat|modernis|moderniz))|approach for (migrat|implement|deliver|transform|roll|automat|the|our|this)|delivery plan|engagement plan)/i,4],
+  ["strategy",/\b(roadmap|strategy (document|paper|deck)|strategic plan|((develop|build|create|write|define|draft|propose)\b.{0,30}\bstrateg(y|ies))|go-to-market (strategy|plan))\b/i,4],
+  ["memo",/\b(memo|memorandum|executive brief(ing)?|briefing note|one[- ]pager|exec summary note)\b/i,4],
+  ["pov",/\b(point of view|pov|thought leadership|op-?ed|perspective piece|opinion piece)\b/i,4],
+  ["deck",/\b(deck|slides?|slideware|powerpoint|ppt|pptx|presentation|keynote|steerco|steering committee)\b/i,5]
 ];
-function bestType(txt){ const d = DETECT.find(([,re])=>re.test(txt)); return d ? d[0] : "general"; }
+function detectType(txt){
+  let best=null;
+  DETECT.forEach(([k,re,w],idx)=>{ const m=txt.match(re); if(m){ const sc=w*100-idx; if(!best||sc>best.sc) best={k,sc,why:m[0].trim()}; } });
+  return best;
+}
+function bestType(txt){ const d = detectType(txt); return d ? d.k : "general"; }
 function autoSelect(){
   const txt = $("raw").value.trim();
-  if(!state.manualType && txt){ const b = bestType(txt); if(b!==state.type) setType(b); }
+  if(!txt){ state.manualType=false; state.lockedOn=null; renderAutoNote(); return; }
+  const b = bestType(txt);
+  // a manual choice holds only until the prompt starts pointing at a different deliverable
+  if(state.manualType && state.lockedOn!==null && b!==state.lockedOn){ state.manualType=false; }
+  if(!state.manualType && b!==state.type){ setType(b); flashCard(); }
   renderAutoNote();
 }
+function flashCard(){ const c=document.querySelector(".tcard.on"); if(!c) return; c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); }
 function renderAutoNote(){
+  const st=$("autoStatus");
+  if(st){
+    const txt=$("raw").value.trim(), d=detectType(txt);
+    if(!txt) st.innerHTML=`<span class="flag">Start typing: the best option will be selected for you.</span>`;
+    else if(state.manualType) st.innerHTML=`<span class="flag tip">You chose <b>${TYPES[state.type].label}</b>.</span> <span class="chip sm" id="reAuto2">↺ Let the app choose</span>`;
+    else st.innerHTML = d ? `<span class="flag ok">✓ Auto-selected <b>${TYPES[state.type].label}</b> because your prompt mentions “${esc(d.why)}”. Tap another card to change it.</span>`
+                          : `<span class="flag ok">✓ Auto-selected <b>General prompt</b>: no specific deliverable named, so the app reads the domain and task instead. Tap a card to change it.</span>`;
+    const r2=$("reAuto2"); if(r2) r2.onclick=()=>{ state.manualType=false; state.lockedOn=null; autoSelect(); };
+    document.querySelectorAll(".tcard").forEach(c=>c.classList.toggle("auto", !state.manualType && !!txt && c.dataset.k===state.type));
+  }
   const n=$("autoNote"); if(!n) return;
   if(!$("raw").value.trim()){ n.innerHTML=""; return; }
   n.innerHTML = state.manualType
     ? `<span class="chip sm" id="reAuto" title="Let the app pick the best option again">↺ Auto-select</span>`
     : `<span class="flag ok" style="font-size:11px">Auto: ${TYPES[state.type].label}</span>`;
-  const r=$("reAuto"); if(r) r.onclick=()=>{ state.manualType=false; autoSelect(); };
+  const r=$("reAuto"); if(r) r.onclick=()=>{ state.manualType=false; state.lockedOn=null; autoSelect(); };
 }
 function analyse(){
   const txt = $("raw").value.trim(); const box = $("analysis");
@@ -1113,7 +1138,7 @@ function analyse(){
   if(!txt){ box.innerHTML=""; return; }
   const f = [];
   const words = txt.split(/\s+/).length;
-  const det = DETECT.find(([,re])=>re.test(txt));
+  const _d = detectType(txt), det = _d ? [_d.k] : null;
   if(det && det[0]!==state.type && state.manualType) f.push(`<span class="flag tip" style="cursor:pointer" data-sw="${det[0]}">Looks like ${/^[aeiour]/i.test(TYPES[det[0]].label)?"an":"a"} ${TYPES[det[0]].label}. Switch?</span>`);
   else if(det) f.push(`<span class="flag ok">✓ Deliverable clear</span>`);
   f.push(/\b(for|audiences?|readers?|cto|cfo|ceo|cio|board|executives?|vp|directors?|teams?|stakeholders?|operators?|clients?|committee|sponsors?|leadership|investors?|engineers?|architects?)\b/i.test(txt) ? `<span class="flag ok">✓ Audience</span>` : (state.type==="general"&&$("audience").value==="auto" ? `<span class="flag">Audience: will be inferred</span>` : `<span class="flag gap">No audience: set it in 03</span>`));
@@ -1123,7 +1148,8 @@ function analyse(){
   box.innerHTML = f.join("");
   box.querySelectorAll("[data-sw]").forEach(el=>el.onclick=()=>{ state.manualType=false; setType(el.dataset.sw); renderAutoNote(); });
 }
-let _at; $("raw").addEventListener("input", ()=>{ clearTimeout(_at); _at=setTimeout(autoSelect,350); analyse(); });
+let _at; const _go=()=>{ clearTimeout(_at); _at=setTimeout(autoSelect,300); analyse(); };
+["input","paste","change","keyup"].forEach(ev=>$("raw").addEventListener(ev,_go));
 $("context").addEventListener("input", analyse);
 
 /* ============================================================
@@ -1393,7 +1419,7 @@ function snapshot(){
   return {f, type:state.type, mode:state.mode, lenses:[...state.lenses], out:lastOutput, at:new Date().toISOString()};
 }
 function restore(s){
-  state.manualType=true; setType(s.type); state.lenses=new Set(s.lenses); state.mode=s.mode;
+  state.manualType=true; state.lockedOn=bestType(s.f.raw||""); setType(s.type); state.lenses=new Set(s.lenses); state.mode=s.mode;
   Object.entries(s.f).forEach(([k,v])=>{ const el=$(k); if(!el) return; if(typeof v==="boolean") el.checked=v; else el.value=v; });
   $("audienceCustom").classList.toggle("hidden",$("audience").value!=="custom");
   $("modeChips").querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.v===s.mode));
