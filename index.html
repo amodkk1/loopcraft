@@ -129,7 +129,12 @@ textarea{resize:vertical;min-height:70px}
 
   <div class="sec">
     <h2><span><span class="n">02</span>What are you building?</span></h2>
-    <div class="analysis" id="autoStatus" style="margin:-4px 0 12px"></div>
+    <div class="chips" id="workChips" style="margin:-2px 0 10px">
+      <span class="chip sm on" data-w="create">Create new</span>
+      <span class="chip sm" data-w="review">Review existing</span>
+      <span class="chip sm" data-w="improve">Improve existing</span>
+    </div>
+    <div class="analysis" id="autoStatus" style="margin:0 0 12px"></div>
     <div class="typegrid" id="types"></div>
     <div id="genPanel" class="hidden" style="margin-top:12px">
       <div class="note" style="margin-bottom:4px">General mode reads your prompt, works out the domain and the kind of task, and builds the loop around them. Override if it guesses wrong.</div>
@@ -731,6 +736,199 @@ const ROUND_PLANS = {
   5:[["argument"],["evidence"],["audience"],["voice"],["polish"]]
 };
 
+/* ============================================================
+   CATEGORY PROFILES: each category thinks, scores, loops and checks differently
+   foci: exactly 5 [name, [checks]] in loop order
+   ============================================================ */
+const PROFILES = {
+  whitepaper:{
+    think:["Thesis: one arguable sentence a sharp reader could disagree with","SCQA opening: Situation, Complication, Question, Answer, one line each","Issue tree: 3–5 MECE supporting arguments, each with the evidence it needs","The strongest opposing view, stated fairly, and how the paper answers it","Exhibit plan: 2–5 exhibits, each with a title that states its takeaway","Insight check: the one idea the reader has not seen elsewhere"],
+    draft:"Write the full paper: title that states the argument, executive summary that stands alone, then every section.",
+    rubric:[["Thesis strength","One clear, arguable claim, stated in the title and executive summary, sustained throughout"],["Argument logic","Sections are MECE; their opening sentences, read in order, reproduce the argument"],["Evidence quality","Claims backed by data, mechanisms and at least one worked example"],["Originality","Says something the reader has not read in ten other papers"],["Reader relevance","Every section answers 'so what' for this reader"],["Readability and voice","Reads like a respected practitioner; zero AI tells"],["Actionability","The reader knows what to do next, specifically"]],
+    foci:[["Thesis and argument",["Is the thesis arguable and in the title and executive summary?","Read only each section's first sentence: does the argument hold?","Remove or merge any section that does not serve the thesis"]],
+          ["Evidence and proof",["Back every important claim with data, a mechanism or an example","Include at least one worked example the reader can follow","Every exhibit title states its takeaway; fact, estimate and opinion are clearly separated"]],
+          ["Counter-arguments and reader",["Steel-man the strongest opposing view, then answer it","Run the critique panel; each lens raises its two hardest objections","Make the close tell the reader what to do on Monday"]],
+          ["Voice and readability",["Remove every banned word and pattern","Vary sentence length; paragraphs of 2–5 sentences","Define jargon on first use or cut it"]],
+          ["Compression and polish",["Cut 15% without losing meaning","The executive summary works on its own","Terms, numbers and names are consistent throughout"]]],
+    final:["The title states the argument, not the topic","The executive summary stands alone","Every section opens with its conclusion","At least one worked example with real or clearly labelled numbers","Limits and trade-offs are named","The close tells the reader what to do"]
+  },
+  deck:{
+    think:["The one message or decision the deck must land, in one sentence","The audience: what they know, what they fear, what they must decide","Ghost deck: action titles only, in order. Read them aloud as a paragraph; fix until they persuade on their own","For each slide: its single job in the story and the visual that does that job","The ask: exactly what you want from the room, by when"],
+    draft:"First write the ghost deck (numbered action titles only) and test it. Then write every slide in full using the slide format.",
+    rubric:[["Storyline","Action titles alone tell a complete, persuasive story"],["Action titles","Every title is a full-sentence claim of 15 words or fewer"],["One message per slide","Each slide proves its title and nothing else"],["Visual fit","Each slide uses the right exhibit for its message"],["Text economy","Body text under ~40 words; bullets parallel and short"],["Evidence on slides","Numbers have units, timeframe and source"],["The ask","The decision or next step is unmistakable"]],
+    foci:[["Storyline",["Read the action titles only: is the argument complete and in the most persuasive order?","Answer first (Pyramid Principle), then support","Cut or merge slides that do not move the story; move detail to the appendix"]],
+          ["Slide logic",["Each slide proves its title and only its title","Split any slide carrying two messages","No slide should need the presenter to explain what it means"]],
+          ["Exhibits and data",["Match chart type to message (comparison, trend, composition, flow, choice)","Specify what to highlight on each chart","Replace bullet-only slides with a visual wherever possible; source every number"]],
+          ["Audience and objections",["Run the critique panel on the deck","Pre-empt the three questions this room will ask; put backup in the appendix","Make the ask explicit on the final slide"]],
+          ["Density and polish",["Body text under ~40 words per slide; bullets parallel and under 12 words","Consistent terms, numbers and formatting across slides","Speaker notes (if any) sound natural spoken aloud"]]],
+    final:["Action titles alone tell the full story","Every content slide has a specified visual","No slide carries more than one message","Every number is sourced","The last slide is the ask, not 'Thank you'"]
+  },
+  consulting:{
+    think:["The governing answer (your hypothesis), in one sentence","Key-line: 3–5 MECE messages that prove it","Client specifics to use: their systems, org names, numbers, language","For each finding: the evidence and the exhibit that proves it","Value at stake: a range and how it is built","Draft the executive summary slide first"],
+    draft:"Write the ghost deck by section, test it, then every slide in full using the slide format.",
+    rubric:[["Answer-first storyline","The answer is up front and the titles alone prove it"],["MECE key-line","Supporting messages don't overlap and cover the case"],["Evidence per finding","Each finding is proven by an exhibit, not asserted"],["Client specificity","Could only have been written for this client"],["Actionable recommendations","Owners, timing, value and trade-offs are explicit"],["Value quantified","Impact is sized with ranges and assumptions"],["Slide craft","One message per slide, the right exhibit, minimal text, sources footnoted"]],
+    foci:[["Answer and storyline",["Is the answer stated on the executive summary slide?","Do the section messages form a MECE key-line?","Read titles only: does the case hold?"]],
+          ["Findings and exhibits",["Every finding has an exhibit that proves it","Benchmarks, waterfalls, 2x2s and heat maps where they carry the point","Every number footnoted"]],
+          ["Client specificity",["Swap test: rewrite anything that would work for another client","Use the client's vocabulary, systems and org names","Reflect what the client has already tried"]],
+          ["Recommendations and value",["Each recommendation has an owner, timing and value range","Quick wins in the first 90 days","Trade-offs and risks named; run the critique panel"]],
+          ["Slide craft and polish",["One message per slide; body text minimal","Section trackers and dividers consistent","Consistent numbers and terms across the deck"]]],
+    final:["The answer is on slide 2 or 3","Every finding is proven by an exhibit","Recommendations have owners, timing and value","The swap test passes on every slide","Every number has a source footnote"]
+  },
+  storyline:{
+    think:["Governing message: the one sentence the audience must accept","Audience: what they believe now, what they fear, what they must decide","Two candidate structures (e.g. SCR vs problem–options–recommendation) and which fits this audience","Key-line: 3–5 MECE supporting messages","Evidence inventory: what you have, what you would need"],
+    draft:"Write storyline v1: governing message, key-line pyramid and the full ghost deck table. No slide design or layout.",
+    rubric:[["Governing message","Specific, arguable, and what the audience must accept"],["Structure choice","The structure suits this audience and decision"],["Key-line","MECE supporting messages that together prove the governing message"],["Horizontal logic","Action titles read alone tell the story"],["Vertical logic","Each slide's planned evidence would prove its title"],["Persuasive order","Sequence follows what this audience needs first"],["Evidence gaps","Missing data and analysis are identified precisely"]],
+    foci:[["Governing message and structure",["Sharpen the governing message until someone could disagree","Confirm the structure choice; try the alternative and compare"]],
+          ["Key-line",["Test the key-line for overlap and gaps","Each section maps to exactly one key-line message"]],
+          ["Horizontal flow",["Read titles only, top to bottom: does each follow from the last?","Every title is a full-sentence claim of 15 words or fewer"]],
+          ["Vertical support and gaps",["For each slide, the evidence that would prove it","List the evidence gaps and how to close each"]],
+          ["Order and cut",["Reorder for what this audience needs first","Move anything not advancing the message to the appendix","Run the critique panel on the storyline"]]],
+    final:["No layout or design detail; this is the argument only","Every slide maps to a key-line message","Titles alone tell the story","An alternative storyline is compared","Evidence gaps are listed with how to close them"]
+  },
+  approach:{
+    think:["The client's situation in their words, including what they have tried","Objectives and how success will be measured","The hard part of this engagement and how the approach handles it","Phase skeleton: each phase's decision or artefact at the gate","Quick wins in the first 4–6 weeks"],
+    draft:"Write the full approach: understanding, objectives, principles, phase table and narrative, governance, RACI, risks and timeline.",
+    rubric:[["Client understanding","Reflects this client's situation and constraints precisely"],["Phase design","Activities lead to outputs; every phase ends in a decision or artefact"],["Measurability","Objectives and exit criteria are observable"],["Governance clarity","Forums, cadence, decision rights and RACI are explicit"],["Risk realism","Risks are specific to this engagement, with mitigations"],["Specificity","Passes the swap test throughout"],["Differentiation","Why-us claims are backed by proof"]],
+    foci:[["Understanding and objectives",["Restate the problem in the client's terms","Objectives measurable and dated"]],
+          ["Phase design and exit criteria",["Every phase: activities → outputs → measurable exit criteria → decision","Quick wins front-loaded"]],
+          ["Governance, roles and dependencies",["Forums, attendees and what each decides","RACI for key deliverables; client responsibilities explicit"]],
+          ["Risks and the hard part",["Name the hardest part openly and show how the approach handles it","Run the critique panel"]],
+          ["Differentiation and polish",["Each differentiator has a proof point","Swap test on every paragraph; cut boilerplate"]]],
+    final:["Every phase ends with a decision or artefact","Exit criteria are observable","The swap test passes","Quick wins appear in the first 4–6 weeks","Client responsibilities and dependencies are explicit"]
+  },
+  framework:{
+    think:["The question the framework answers and who asks it","Brainstorm 8+ candidate dimensions, then reduce to 3–7 that are MECE","How the elements relate: sequence, dependency or tension","Level definitions based on observable evidence","A realistic case to stress-test it with"],
+    draft:"Write the full framework: overview table, level matrix, application guide, worked example and diagnostic questions.",
+    rubric:[["Purpose clarity","The question it answers and its user are explicit"],["MECE structure","3–7 elements, no overlap, full coverage"],["Observable criteria","Levels and scores defined by evidence, not adjectives"],["Internal logic","Relationships and trade-offs between elements are explicit"],["Usability","A newcomer can apply it from the guide alone"],["Worked example","A realistic case shows it working, and where it strains"],["Distinctiveness","Clear about what it adds beyond existing models and standards"]],
+    foci:[["Structure",["Pairwise overlap test on every element","Coverage test: what part of the problem is not covered?","Keep 3–7 elements"]],
+          ["Observable criteria",["Rewrite every adjective-based level into observable evidence","Each cell of the level matrix can be verified by an assessor"]],
+          ["Stress-test",["Apply the framework to a realistic case end to end","Fix whatever breaks or feels forced; add limits"]],
+          ["Usability and diagnostics",["Step-by-step application guide","3–5 diagnostic questions per element","Run the critique panel"]],
+          ["Positioning and polish",["Position against existing models or standards in the field","A memorable, not cute, name; precise one-page visual description"]]],
+    final:["3–7 MECE elements","Every level defined by observable evidence","A worked example applies it end to end","Limits stated: when not to use it","It is clear what it adds to existing models"]
+  },
+  pov:{
+    think:["The claim: what you believe that credible peers would dispute","Who disagrees, and their best argument","First-hand evidence: projects, data or patterns you have seen","What changes for the reader if you are right","A hook: a specific moment, number or observation"],
+    draft:"Write the full piece: title, standfirst, body sections with headers that make claims.",
+    rubric:[["Conviction","A clear stance, defended"],["Originality","Not the consensus view restated"],["Evidence from practice","Grounded in things observed, not generalities"],["Handling objections","Opposing views answered honestly"],["Reader implication","The reader knows what changes for them"],["Voice","Sounds like a specific, credible person"],["Hook and close","Opens with something specific; ends with action, not summary"]],
+    foci:[["Claim sharpness",["Could a credible peer disagree? If not, sharpen","One idea, developed deeply; cut the others"]],
+          ["Evidence from practice",["Anchor every claim in something observed","Add one concrete example or number"]],
+          ["Objections",["State the best counter-argument fairly and answer it","Run the critique panel"]],
+          ["Voice",["Remove banned words and patterns","Write the way you'd talk to a smart peer"]],
+          ["Hook, close and compression",["Open with the specific; close with what to do","Cut 15%"]]],
+    final:["The stance is clear in the first 100 words","A credible peer could disagree","Claims are grounded in practice","No 'both sides' ending","The close gives the reader something to do"]
+  },
+  business:{
+    think:["The decision: amount, timing and who decides","Options, including do-nothing and a minimal option","Value-driver tree: where the benefits and costs actually come from","Key assumptions and their sources","The 2–3 assumptions most likely to move the answer"],
+    draft:"Write the full business case with options table, financial summary, assumptions table and sensitivity.",
+    rubric:[["Decision clarity","The decision, amount and timing are stated in the first lines"],["Option fairness","Real alternatives including do-nothing, evaluated on the same criteria"],["Financial rigour","Totals reconcile; no double counting; timing realistic"],["Assumption transparency","Every number traces to an assumption and a source"],["Sensitivity and risk","Break-even values and downside shown"],["Strategic fit","Non-financial value is real and specific"],["Recommendation strength","Clear, staged, and defensible to a CFO"]],
+    foci:[["Decision and options",["State the decision up front","Cost the do-nothing option honestly"]],
+          ["Numbers and assumptions",["Reconcile every total","Remove double counting; separate hard from soft benefits","Every figure traces to the assumptions table"]],
+          ["Sensitivity and risk",["Flex the 2–3 key assumptions; show break-even","Name the downside case"]],
+          ["CFO challenge",["Run the critique panel, led by the sceptical CFO","Answer the first number a CFO would challenge"]],
+          ["Clarity and polish",["One-page summary that stands alone","Stage-gate the investment"]]],
+    final:["Totals reconcile","Every number traces to an assumption","Do-nothing is costed","Sensitivity shows break-even values","The investment is stage-gated"]
+  },
+  strategy:{
+    think:["Baseline facts: where things stand today","Target state: measurable and dated","The real choices, and the 'not doing' list","Initiative → choice → KPI mapping","Dependencies and the logic of sequencing"],
+    draft:"Write the full strategy and roadmap.",
+    rubric:[["Diagnosis","Baseline and root causes are factual and sharp"],["Choice clarity","Explicit choices, trade-offs and a 'not doing' list"],["Coherence","Initiatives tie to choices and to KPIs"],["Sequencing logic","Order follows dependency and value, and says why"],["Measurability","KPIs and leading indicators are defined"],["Feasibility","Capability, funding and operating-model implications are realistic"],["Adaptability","Decision points for re-planning are set"]],
+    foci:[["Diagnosis and target",["Baseline backed by facts","Target state measurable and dated"]],
+          ["Choices and trade-offs",["State what we will not do","Each choice has a reason and a cost"]],
+          ["Initiatives and sequencing",["Every initiative maps to a choice and a KPI","Sequence by dependency and value"]],
+          ["KPIs and feasibility",["Leading indicators visible within 90 days","Capability and funding realism; run the critique panel"]],
+          ["Polish",["Roadmap table complete","Decision points for re-planning"]]],
+    final:["Explicit 'not doing' list","Every initiative maps to a choice and a KPI","Sequencing logic is stated","Leading indicators within 90 days","Decision points for re-planning"]
+  },
+  proposal:{
+    think:["Evaluation criteria and weightings (from the RFP if provided)","The client's real objective behind the requirements","Three win themes, each with proof","Likely competitors' weaknesses to ghost","Compliance checklist"],
+    draft:"Write the full response, section by section, mirroring the RFP structure where known.",
+    rubric:[["Compliance","Every requirement answered, in the order and format asked"],["Client focus","Leads with the client's goals, not our credentials"],["Win themes","Three clear themes threaded through every section"],["Proof","Every capability claim backed by a case, metric or asset"],["Solution fit","The solution answers the real problem, not just the words"],["Evaluator clarity","Easy to score against each criterion"],["Risk and commercial clarity","Assumptions, dependencies and risks are explicit"]],
+    foci:[["Compliance and criteria",["Map every requirement to an answer","Mirror the evaluation criteria and the client's words"]],
+          ["Win themes and proof",["Thread three win themes through every section","Back each claim with proof"]],
+          ["Client language and benefits",["Lead every section with the client outcome","Ghost competitor weaknesses without naming them"]],
+          ["Evaluator panel",["Score it as an evaluator would, criterion by criterion","Run the critique panel"]],
+          ["Readability and polish",["Executive summary in the client's language","Consistent names, numbers and terms"]]],
+    final:["Every requirement is answered","Three win themes are visible throughout","Every claim has proof","The executive summary leads with the client's goal","Risks and assumptions are explicit"]
+  },
+  rfpsummary:{
+    think:["Inventory the RFP's sections and annexes","Locate every mandatory requirement","Extract all dates, deadlines and submission rules","Extract evaluation criteria and weights","Note contract and commercial terms and anything unusual"],
+    draft:"Write the full RFP summary using the format below.",
+    rubric:[["Completeness","Every mandatory requirement, date and criterion is captured"],["Accuracy and references","Every item cites its RFP section; nothing invented"],["Requirement classification","Mandatory vs desirable vs unclear is right"],["Risk insight","Contract traps, conflicts and ambiguities are surfaced"],["Bid / no-bid quality","A scored, reasoned recommendation"],["Bid-team usability","A bid lead could run the kick-off from this alone"],["Brevity","Tables and short lines; no restating the RFP"]],
+    foci:[["Completeness",["Walk the RFP section by section; nothing mandatory missed","All dates and submission rules captured"]],
+          ["Accuracy and references",["Every item cites its section or page","Anything not specified is marked [NOT IN RFP]; inference is labelled"]],
+          ["Risk and ambiguity",["Contract traps: liability, penalties, IP, payment, termination","Conflicting or vague requirements turned into clarification questions"]],
+          ["Bid decision",["Score fit, win probability, effort, risk and strategic value","Recommend bid or no-bid with reasoning; propose win themes"]],
+          ["Usability",["At-a-glance table complete","Tables scannable; cut anything that restates the RFP"]]],
+    final:["Every date and term cites its RFP section","All mandatory requirements are listed","Nothing is invented; gaps are marked [NOT IN RFP]","Clarification questions are prioritised","The bid / no-bid recommendation is explicit"]
+  },
+  projectreport:{
+    think:["Status per dimension (schedule, budget, scope, risk) with the evidence for each","What changed since the last report","Variance and its cause","Top risks and issues, each with an owner","Decisions needed from leadership"],
+    draft:"Write the full report using the format below.",
+    rubric:[["Status honesty","RAG ratings are defined and defensible; no watermelon reporting"],["Metrics and evidence","Progress shown as outcomes and numbers, not activities"],["Variance explanation","Every variance has a cause and a recovery action"],["Risk and issue management","Each has an owner, date, mitigation and trend"],["Decision clarity","Decisions needed are near the top, with deadlines"],["Executive readability","The first five lines tell the whole story"],["Forward plan","Next-period priorities are concrete"]],
+    foci:[["Status honesty",["Define RAG and check each rating against its evidence","Watermelon check: anything green outside and red inside?"]],
+          ["Metrics and variance",["Replace activities with outcomes and numbers","Explain every variance with a cause and a recovery action"]],
+          ["Risks, issues and decisions",["Owner, date, mitigation and trend for each","Decisions needed moved near the top, with deadlines"]],
+          ["Executive readability",["The first five lines tell the story","Run the critique panel"]],
+          ["Polish and consistency",["Numbers consistent across sections","Tables complete; cut padding"]]],
+    final:["Overall status and its reason are in the first lines","RAG ratings are defensible","Every variance is explained","Every risk and issue has an owner","Decisions needed are at the top"]
+  },
+  memo:{
+    think:["Bottom line up front, in 2 sentences","The decision or ask","The 2–4 points that carry the argument","The main risk and what you would watch"],
+    draft:"Write the full memo.",
+    rubric:[["BLUF","The first paragraph is enough to act on"],["Decision readiness","The ask, owner and date are explicit"],["Argument economy","2–4 points, each necessary"],["Evidence","Numbers over adjectives"],["Risk honesty","The main risk is named"],["Brevity","Fits the length; nothing to cut"],["Tone","Direct, calm, senior"]],
+    foci:[["BLUF and ask",["Could the reader act on the first paragraph alone?","Make the ask explicit, with owner and date"]],
+          ["Support and evidence",["Keep only the points that change the decision","Numbers over adjectives"]],
+          ["Reader objections",["Answer the reader's first objection","Run the critique panel"]],
+          ["Cut to length",["Remove every sentence that does not change the decision"]],
+          ["Tone and polish",["Direct and calm; no hedging stacks"]]],
+    final:["The reader can act on the first paragraph","The ask has an owner and a date","Nothing that doesn't change the decision","Fits the length"]
+  },
+  architecture:{
+    think:["Business drivers and constraints","Quality attributes, prioritised, with targets","Candidate options for the key decisions, with trade-offs","Components and their single responsibilities","Integration flows that matter most"],
+    draft:"Write the full architecture document.",
+    rubric:[["Driver alignment","Every major choice traces to a driver"],["Component clarity","Each component has one clear responsibility and defined interfaces"],["Decision justification","ADRs record the options rejected and why"],["NFR measurability","Performance, availability, security and so on have numeric targets"],["Integration completeness","Key flows described step by step"],["Standards alignment","Relevant standards and reference architectures are applied correctly"],["Transition realism","The path from current to target state is credible"]],
+    foci:[["Drivers and principles",["Each principle has a rationale and an implication","Every major choice traces to a driver"]],
+          ["Components and interfaces",["One responsibility per component","Interfaces and data ownership explicit"]],
+          ["Decisions and trade-offs",["ADR for each key decision, with rejected options","Run the critique panel"]],
+          ["NFRs, security and operability",["Numeric targets for every NFR","Who runs it, how it's monitored, how it fails"]],
+          ["Transition and polish",["Transition architecture and roadmap","Consistent names across all views"]]],
+    final:["Every NFR has a number","Every key decision has an ADR with alternatives","Every component has one responsibility","Diagrams are described precisely enough to draw","Transition path is credible"]
+  }
+};
+const CODE_FOCI = [["Requirements and design",["Restate inputs, outputs and edge cases","Choose the simplest design that meets them"]],["Correctness and edge cases",["Trace the code against at least three edge cases","Fix any wrong output"]],["Robustness",["Handle bad input, errors and failure modes explicitly","No silent failures"]],["Readability",["Clear names and structure; comment why, not what","Remove unrequested complexity"]],["Docs and polish",["How to run and test it, with an example","Known limitations listed"]]];
+const GENERAL_FOCI = [["Core answer and structure",["Is the most important point or result first?","Does the structure fit the task?"]],["Accuracy and specificity",["Replace anything vague with specifics","Check facts; separate fact, estimate and opinion"]],["Reader needs",["Run the critique panel","Answer the reader's likely follow-up question"]],["Voice and clarity",["Remove banned words and patterns","Plain words; varied sentence length"]],["Polish and proportion",["Cut what doesn't help","Length proportionate to the ask"]]];
+const ROUND_IDX = {1:[[0,1,2,3,4]],2:[[0,1],[2,3,4]],3:[[0],[1,2],[3,4]],4:[[0],[1],[2],[3,4]],5:[[0],[1],[2],[3],[4]]};
+const REVIEW_FOCI = [
+  ["Coverage",["Walk every slide or section in order against the standard (blueprint, techniques, failure modes)","Flag anything missing that this type of document needs","Check the main message: is it stated, and is it the right one?"]],
+  ["Precision of findings",["Every finding names its exact location and quotes the problem text","Every fix is concrete; where wording is the problem, give the rewritten text","Remove vague findings ('improve flow') or make them specific"]],
+  ["Reader and priority",["Run the critique panel on the material","Re-rank findings by impact on this audience and purpose","Separate critical issues from polish"]],
+  ["Quality of fixes",["Rewrites follow the human voice rules and fit the author's style","Fixes are consistent with each other","Do not over-edit what already works; name what to keep"]],
+  ["Prioritise and compress",["Top 5 changes that would most improve it, ranked","Cut minor findings that are noise","Verdict is honest and specific"]]
+];
+function profileFor(type, t){
+  if(PROFILES[type]) return PROFILES[type];
+  if(t && t.isCode) return {foci:CODE_FOCI};
+  return {foci:GENERAL_FOCI};
+}
+
+/* ---------- work mode: create / review / improve ---------- */
+const CREATE_VERB = /\b(write|create|build|develop|draft|prepare|design|produce|make|generate|put together|come up with|compose|outline)\b/i;
+const REVIEW_VERB = /\b(review|critique|critic|feedback|assess|evaluate|audit|check|proof-?read|score|grade|red-?team|poke holes|stress[- ]test|what'?s wrong with|comments? on|look over|go through|sanity check|validate)\b/i;
+const IMPROVE_VERB = /\b(improve|rewrite|re-write|revise|refine|polish|fix|edit|tighten|strengthen|enhance|rework|redo|upgrade|sharpen|make (it|this|these|them|my|our) (better|stronger|sharper|clearer))\b/i;
+const MATERIAL = /\b(attached|enclosed|uploaded|pasted|below|following|existing|current|this|these|my|our|the draft|draft)\b/i;
+function detectWork(txt){
+  if(!txt) return {m:"create", why:""};
+  const c = txt.search(CREATE_VERB), r = txt.search(REVIEW_VERB), im = txt.search(IMPROVE_VERB);
+  const mat = MATERIAL.test(txt);
+  const first = arr => arr.filter(x=>x>=0).sort((a,b)=>a-b)[0];
+  const lead = first([c,r,im]);
+  if(lead===undefined) return {m:"create", why:""};
+  if(im>=0 && (mat || r>=0) && (c<0 || im<=c)) return {m:"improve", why:txt.match(IMPROVE_VERB)[0]};
+  if(r>=0 && (c<0 || r<c) && (mat || r===lead)) return {m:"review", why:txt.match(REVIEW_VERB)[0]};
+  return {m:"create", why:""};
+}
+
 const AUDIENCES = {
   csuite:"C-suite executives: little time, care about value, risk, competitive position and what decision is needed",
   board:"Board members and investors: care about strategic risk, return, governance and whether management has thought it through",
@@ -953,8 +1151,8 @@ function extractIntel(raw){
   t = t.replace(/^(please\s+|can you\s+|could you\s+|i (want|need) (you )?to\s+|help me( to)?\s+|i'?d like( you)?( to)?\s+)*/i,"");
   const isQ = /^(how|what|why|which|when|where|should|can|could|is|are|do|does|will)\b/i.test(t);
   if(!isQ){
-    t = t.replace(/^(write|create|build|develop|draft|make|prepare|give me|generate|produce|design|summari[sz]e|analy[sz]e|plan|suggest|come up with|put together|outline|review|assess|compare|tell me about|explain)\s+(me\s+)?/i,"")
-         .replace(/^(a|an|the|some|my|our)\s+/i,"")
+    t = t.replace(/^(?:(?:write|create|build|develop|draft|make|prepare|give me|generate|produce|design|summari[sz]e|analy[sz]e|plan|suggest|come up with|put together|outline|review|assess|compare|tell me about|explain|improve|rewrite|revise|refine|polish|fix|edit|tighten|strengthen|critique|check|proofread|audit|evaluate|and)\s+)+(me\s+)?/i,"")
+         .replace(/^(?:(?:a|an|the|some|my|our|this|these|attached|enclosed|uploaded|existing|current|draft)\s+)+/i,"")
          .replace(DELIV," ")
          .replace(/^\s*(?:(?:on|about|regarding|covering|around|arguing|recommending|explaining|showing|describing|proposing|that|this|these|those|attached|the attached|we|which|of|for|with|to)\b\s*)+/i,"")
          .replace(/^\s*(the|a|an)\s+/i,"");
@@ -962,7 +1160,7 @@ function extractIntel(raw){
   t = cleanSpaces(t.replace(/\?+$/,"")).split(/\s+/).slice(0,20).join(" ");
   const roleRe = new RegExp(`^${RW}$`,"i");
   const terms = [...new Set((txt.match(/\b([A-Z][A-Za-z0-9]*[A-Z0-9][A-Za-z0-9-]*|[A-Za-z]*[A-Z0-9][A-Za-z0-9]*-[A-Za-z0-9-]+|[A-Za-z]+-[A-Z0-9][A-Za-z0-9-]*|[A-Z][a-z]{2,}(?:\s[A-Z][a-z]{2,})+)\b/g)||[])
-      .filter(w=>!/^(I|A|The|My|Our|Please|Write|Create|Build|Develop|Make|Help|Plan|Explain|Give)$/.test(w) && !roleRe.test(w)))].slice(0,8);
+      .filter(w=>!/^(I|A|The|My|Our|Please|Write|Create|Build|Develop|Make|Help|Plan|Explain|Give|Review|Improve|Rewrite|Fix|Check|Can|Could|PowerPoint|PPT|PPTX|RFP|RFI|RFQ|PDF|SOW)$/i.test(w) && !roleRe.test(w)))].slice(0,8);
   const numbers = [...new Set(txt.match(/\b\d[\d,.]*(?:-day|-week|-month|-year)?\s?(?:%|percent|months?|years?|weeks?|days?|slides?|pages?|words?|k\b|m\b|bn|million|billion|sites?|users?|customers?|people)?/gi)||[])].map(s=>s.trim()).filter(s=>s.length>1).slice(0,6);
   return {topic:t, reader, terms, numbers};
 }
@@ -1003,7 +1201,7 @@ function makeGeneral(raw){
 const TYPES = { general:{ label:"General prompt", hint:"Any task: auto-detects domain and context",
   sizes:["Concise","Standard","In-depth"], sizeDefault:1, lenses:["expert","editor","exec"] }, ...TYPES0 };
 
-const state = { type:"general", mode:"auto", lenses:new Set(["expert","editor","exec"]) };
+const state = { work:"create", manualWork:false, type:"general", mode:"auto", lenses:new Set(["expert","editor","exec"]) };
 let lastOutput = "";
 
 function renderTypes(){
@@ -1023,7 +1221,7 @@ function setType(k, keepLenses){
   if(k==="general"){ ["audience","purpose","voice"].forEach(i=>{ if(!$(i).dataset.touched) $(i).value="auto"; }); }
   else { ["audience","purpose","voice"].forEach(i=>{ if($(i).value==="auto") $(i).value=$(i).options[1].value; }); }
   $("audienceCustom").classList.toggle("hidden", $("audience").value!=="custom");
-  renderTypes(); renderLenses(); analyse(); renderAutoNote();
+  renderTypes(); renderLenses(); analyse(); renderAutoNote(); if(typeof renderPlan==='function') renderPlan();
 }
 function renderLenses(){
   $("lenses").innerHTML = Object.entries(LENSES).map(([k,v]) =>
@@ -1036,7 +1234,8 @@ function renderLenses(){
 }
 function renderPlan(){
   const n = +$("rounds").value; $("roundsOut").textContent = n;
-  $("planPreview").innerHTML = ROUND_PLANS[n].map((f,i)=>`R${i+1} → ${f.map(x=>FOCI[x].name).join(" + ")}`).join("<br>");
+  const fz = (state.work==="review" && state.type!=="rfpsummary") ? REVIEW_FOCI : profileFor(state.type, state.type==="general" ? {isCode: TASKS.code===resolveGeneral($("raw").value).tsk} : null).foci;
+  $("planPreview").innerHTML = ROUND_IDX[n].map((f,i)=>`R${i+1} → ${f.map(x=>fz[x][0]).join(" + ")}`).join("<br>");
 }
 $("modeChips").querySelectorAll(".chip").forEach(el => el.onclick = () => {
   state.mode = el.dataset.v;
@@ -1106,13 +1305,21 @@ function detectType(txt){
 function bestType(txt){ const d = detectType(txt); return d ? d.k : "general"; }
 function autoSelect(){
   const txt = $("raw").value.trim();
-  if(!txt){ state.manualType=false; state.lockedOn=null; renderAutoNote(); return; }
+  if(!txt){ state.manualType=false; state.lockedOn=null; state.manualWork=false; setWork("create"); return; }
   const b = bestType(txt);
   // a manual choice holds only until the prompt starts pointing at a different deliverable
   if(state.manualType && state.lockedOn!==null && b!==state.lockedOn){ state.manualType=false; }
   if(!state.manualType && b!==state.type){ setType(b); flashCard(); }
+  const w = detectWork(txt);
+  if(!state.manualWork) setWork(w.m, w.why);
   renderAutoNote();
 }
+function setWork(m, why){
+  state.work = m; state.workWhy = why||"";
+  document.querySelectorAll("#workChips .chip").forEach(c=>c.classList.toggle("on", c.dataset.w===m));
+  renderPlan(); renderAutoNote();
+}
+document.querySelectorAll("#workChips .chip").forEach(c=>c.onclick=()=>{ state.manualWork=true; setWork(c.dataset.w); });
 function flashCard(){ const c=document.querySelector(".tcard.on"); if(!c) return; c.classList.remove("flash"); void c.offsetWidth; c.classList.add("flash"); }
 function renderAutoNote(){
   const st=$("autoStatus");
@@ -1122,6 +1329,13 @@ function renderAutoNote(){
     else if(state.manualType) st.innerHTML=`<span class="flag tip">You chose <b>${TYPES[state.type].label}</b>.</span> <span class="chip sm" id="reAuto2">↺ Let the app choose</span>`;
     else st.innerHTML = d ? `<span class="flag ok">✓ Auto-selected <b>${TYPES[state.type].label}</b> because your prompt mentions “${esc(d.why)}”. Tap another card to change it.</span>`
                           : `<span class="flag ok">✓ Auto-selected <b>General prompt</b>: no specific deliverable named, so the app reads the domain and task instead. Tap a card to change it.</span>`;
+    if(txt){
+      const wl = {create:"Create new",review:"Review existing",improve:"Improve existing"}[state.work];
+      if(state.type==="rfpsummary") st.innerHTML += ` <span class="flag">RFP summary always analyses the RFP you provide</span>`;
+      else if(state.manualWork) st.innerHTML += ` <span class="flag tip">Mode: <b>${wl}</b> (your choice)</span> <span class="chip sm" id="reWork">↺ Auto mode</span>`;
+      else if(state.work!=="create") st.innerHTML += ` <span class="flag ok">Mode: <b>${wl}</b> because your prompt says “${esc(state.workWhy)}”</span>`;
+    }
+    const rw=$("reWork"); if(rw) rw.onclick=()=>{ state.manualWork=false; autoSelect(); };
     const r2=$("reAuto2"); if(r2) r2.onclick=()=>{ state.manualType=false; state.lockedOn=null; autoSelect(); };
     document.querySelectorAll(".tcard").forEach(c=>c.classList.toggle("auto", !state.manualType && !!txt && c.dataset.k===state.type));
   }
@@ -1158,215 +1372,317 @@ $("context").addEventListener("input", analyse);
 function build(){
   const raw = $("raw").value.trim();
   const t = state.type==="general" ? makeGeneral(raw) : TYPES[state.type];
+  const work = state.type==="rfpsummary" ? "create" : state.work;
+  const REV = work==="review", IMP = work==="improve", CRE = work==="create";
+  const prof = profileFor(state.type, t);
   const size = t.sizes[+$("size").value];
   const audKey = $("audience").value;
   const _ei = $("optEI").checked, intel = extractIntel(raw);
-  const audience = (_ei && intel.reader && audKey!=="custom" && !$("audience").dataset.touched) ? `${intel.reader} (from the brief)${audKey!=="auto"?`. Profile: ${AUDIENCES[audKey]}`:""}` : audKey==="auto" ? (intel.reader ? `${intel.reader} (from the brief)` : _ei ? "Not stated. Define the most specific likely reader (role, seniority, type of organisation, what they already know and what they need to decide) and write for that person" : "Not specified. Infer the most likely reader from the brief and domain, and state who you assumed in Phase 0") : audKey==="custom" ? ($("audienceCustom").value.trim() || "the reader described in the brief") : AUDIENCES[audKey];
+  const _untouched = id => !$(id).dataset.touched;
+  const audience = ((REV||IMP) && !intel.reader && _untouched("audience") && audKey!=="custom") ? "Work out the intended reader from the material itself and state it in Phase 0" : (_ei && intel.reader && audKey!=="custom" && !$("audience").dataset.touched) ? `${intel.reader} (from the brief)${audKey!=="auto"?`. Profile: ${AUDIENCES[audKey]}`:""}` : audKey==="auto" ? (intel.reader ? `${intel.reader} (from the brief)` : (REV||IMP) ? "Not stated. Work out the intended reader from the material itself and state it in Phase 0" : _ei ? "Not stated. Define the most specific likely reader (role, seniority, type of organisation, what they already know and what they need to decide) and write for that person" : "Not specified. Infer the most likely reader from the brief and domain, and state who you assumed in Phase 0") : audKey==="custom" ? ($("audienceCustom").value.trim() || "the reader described in the brief") : AUDIENCES[audKey];
   const industry = $("industry").value.trim() || (t.general && t.g.d!==GENERIC_DOMAIN ? t.g.d.name + (t.g.d2?` (with ${t.g.d2.name.toLowerCase()})`:"") : "");
-  const purpose = $("purpose").value==="auto" ? (_ei ? "Define the specific outcome a great result produces for the reader (a decision, an action, a changed view, working code) and the observable signs it worked; state it in Phase 0" : "Infer the real goal behind the request and what a great result would let me do; state it in Phase 0") : PURPOSES[$("purpose").value];
-  const voice = $("voice").value==="auto" ? (t.isCode ? "Clear, precise and plain. Explanations short and practical, aimed at someone who will run and maintain the code." : `Sound like ${t.general?t.g.d.persona:t.persona} would sound talking to a respected peer: direct, specific, confident where the evidence supports it, plain about uncertainty.`) : VOICES[$("voice").value];
+  const purpose = ((REV||IMP) && _untouched("purpose")) ? "Work out what the material is meant to achieve (decision, approval, understanding, a win) and judge it against that; state it in Phase 0" : $("purpose").value==="auto" ? ((REV||IMP) ? "Work out what the material is meant to achieve (decision, approval, understanding, a win) and judge it against that; state it in Phase 0" : _ei ? "Define the specific outcome a great result produces for the reader (a decision, an action, a changed view, working code) and the observable signs it worked; state it in Phase 0" : "Infer the real goal behind the request and what a great result would let me do; state it in Phase 0") : PURPOSES[$("purpose").value];
+  const voice = (REV && _untouched("voice")) ? "Candid, specific and constructive, like a respected senior reviewer: direct about what doesn't work, precise about how to fix it, clear about what to keep." : $("voice").value==="auto" ? (t.isCode ? "Clear, precise and plain. Explanations short and practical, aimed at someone who will run and maintain the code." : REV ? "Candid, specific and constructive, like a respected senior reviewer: direct about what doesn't work, precise about how to fix it, clear about what to keep." : `Sound like ${t.general?t.g.d.persona:t.persona} would sound talking to a respected peer: direct, specific, confident where the evidence supports it, plain about uncertainty.`) : VOICES[$("voice").value];
   const spelling = $("spelling").value;
   const context = $("context").value.trim();
   const must = $("must").value.trim(), avoid = $("avoid").value.trim();
-  const rounds = +$("rounds").value, plan = ROUND_PLANS[rounds];
+  const rounds = +$("rounds").value, plan = ROUND_IDX[rounds];
+  const foci = REV ? REVIEW_FOCI : prof.foci;
   const bar = $("bar").value, vis = $("visibility").value, mode = state.mode;
   const lenses = [...state.lenses].map(k=>LENSES[k]);
   if(t.general && t.domainLens && !lenses.some(l=>l.name===t.domainLens.name)) lenses.unshift(t.domainLens);
+  const deckish = isDeck(state.type);
   const o = { human:$("optHuman").checked, evidence:$("optEvidence").checked, think:$("optThink").checked,
-              visual:$("optVisual").checked, ask:$("optAsk").checked, ei:$("optEI").checked, notes:$("optNotes").checked && ["deck","consulting"].includes(state.type) };
+              visual:$("optVisual").checked, ask:$("optAsk").checked, ei:$("optEI").checked, notes:$("optNotes").checked && ["deck","consulting"].includes(state.type) && !REV };
+  const thing = t.general ? "material" : t.label.toLowerCase().replace("powerpoint","PowerPoint").replace("rfp","RFP");
+  const unit = deckish ? "slide" : "section";
 
   const L = [];
   function art(w){ return /^[aeiou]/i.test(w)?'an':'a'; }
-  const H = s => { L.push(""); L.push("## "+s); };
+  let n = 0;
+  const H = s => { L.push(""); L.push(`## ${++n}. ${s}`); };
   const P = s => L.push(s);
 
-  P(`# LOOP PROMPT · ${t.general?`${t.label.toUpperCase()} · ${(t.g.d.name).toUpperCase()}`:t.label.toUpperCase()}`);
-  P(`You will ${t.general?"complete the task below":`produce ${art(t.label)} ${t.label}`} through a disciplined loop: think, draft, score against a hard rubric, get attacked by a critique panel, rewrite. Repeat. Each round fixes a different class of weakness. Do not shortcut the loop and do not grade yourself generously.`);
+  // ---------- title and contract
+  const modeTag = REV ? "REVIEW" : IMP ? "IMPROVE" : "CREATE";
+  P(`# LOOP PROMPT · ${modeTag} · ${t.general?`${t.label.toUpperCase()} · ${(t.g.d.name).toUpperCase()}`:t.label.toUpperCase()}`);
+  if(REV) P(`You will REVIEW the ${thing} I provide. You are not creating a new one. Work in a disciplined loop: read it fully, judge it against the standard for this kind of document, get challenged by a review panel, then sharpen your review. Each round makes the review more complete, more precise and more useful. Do not shortcut the loop, and do not soften findings to be polite.`);
+  else if(IMP) P(`You will IMPROVE the ${thing} I provide: diagnose what is weak, then rebuild it into a stronger version that keeps what already works. Work in a disciplined loop: diagnose, rewrite, score against a hard rubric, get attacked by a critique panel, rewrite again. Each round fixes a different class of weakness.`);
+  else P(`You will ${t.general?"complete the task below":`produce ${art(t.label)} ${t.label}`} through a disciplined loop: think, draft, score against a hard rubric, get attacked by a critique panel, rewrite. Repeat. Each round fixes a different class of weakness. Do not shortcut the loop and do not grade yourself generously.`);
 
-  H("1. ROLE");
+  // ---------- role
+  H("ROLE");
   if(t.general) P(`You are ${t.persona}. You know what serious practitioners in this area care about: ${t.g.d.care}.`);
   else P(`You are ${t.persona}.${industry?` You have deep, current, hands-on knowledge of ${industry}: its economics, its technology, its standards bodies, its vocabulary and what its senior people worry about.`:""}`);
+  if(REV) P(`In this task you are the reviewer. You have reviewed hundreds of ${deckish?"decks":"documents"} like this and you know exactly what makes one land or fail with its audience.`);
+  if(IMP) P(`In this task you are the editor and co-author: you respect the author's intent and content, and you make it substantially better.`);
   if(_ei && intel.topic) P(`This task is about: ${intel.topic}. You have done this exact kind of work many times, and you know what separates a credible answer from a generic one.${intel.terms.length?` You use ${intel.terms.join(", ")} with correct, current meaning and know the details a practitioner would check.`:""}`);
-  P(t.isCode ? `You work like a senior engineer, not like an autocomplete. Your work is judged on whether it runs, handles the hard cases, and could be maintained by someone else.` : `You write like a senior human expert, not like an AI assistant. Your work is judged on whether a demanding reader would believe a respected practitioner wrote it.`);
+  if(!REV) P(t.isCode ? `You work like a senior engineer, not like an autocomplete. Your work is judged on whether it runs, handles the hard cases, and could be maintained by someone else.` : `You write like a senior human expert, not like an AI assistant. Your work is judged on whether a demanding reader would believe a respected practitioner wrote it.`);
 
-  H("2. THE BRIEF");
+  // ---------- brief
+  H("THE BRIEF");
   P(`"""\n${raw || "[Paste your brief here]"}\n"""`);
-  P(t.general ? `Task type: ${t.label} — depth: ${size}` : `Deliverable: ${t.label} — ${size}`);
+  if(REV||IMP){
+    P(`Material to ${REV?"review":"improve"}: ${t.general?"the material I provide":`${art(thing)} ${thing}`}${context?" (pasted below)":" (attached to this message)"}.`);
+    if(!context) P(`If nothing is attached, or you cannot read it fully (for example slides that are images), say exactly what you could and could not read, ask me to paste the text or attach a PDF, and stop.`);
+  } else P(t.general ? `Task type: ${t.label} — depth: ${size}` : `Deliverable: ${t.label} — ${size}`);
   P(`Primary reader: ${audience}`);
   if(industry) P(`Industry / domain: ${industry}`);
   P(`Purpose: ${purpose}`);
   if(_ei && intel.topic) P(`Core subject: ${intel.topic}`);
-  if(_ei && (intel.terms.length||intel.numbers.length)) P(`Specifics in the brief to build around: ${[...intel.terms,...intel.numbers].join(" · ")}`);
-  if(must) P(`Must include: ${must}`);
+  if(_ei && (intel.terms.length||intel.numbers.length)) P(`Specifics in the brief: ${[...intel.terms,...intel.numbers].join(" · ")}`);
+  if(must) P(`Must include${REV?" / check for":""}: ${must}`);
   if(avoid) P(`Must avoid: ${avoid}`);
   P(`Language: ${spelling} English spelling and conventions.`);
-  if(context){ P(`\nMaterial supplied by me (treat as the most important input; build on it, quote my facts accurately, and prefer it over general knowledge):`); P(`"""\n${context}\n"""`); }
+  if(context){
+    P(REV||IMP ? `\nThe material:` : `\nMaterial supplied by me (treat as the most important input; build on it, quote my facts accurately, and prefer it over general knowledge):`);
+    P(`"""\n${context}\n"""`);
+  }
 
-  H("3. VOICE");
+  H("VOICE");
   P(voice);
-  P(`Write in the first person plural ("we") where a firm or team is speaking, otherwise direct and impersonal. Never address the reader as "you" in a salesy way.`);
+  if(!REV) P(`Write in the first person plural ("we") where a firm or team is speaking, otherwise direct and impersonal. Never address the reader as "you" in a salesy way.`);
 
-  H("4. PHASE 0 — INTAKE");
+  // ---------- phase 0
+  H("PHASE 0 — INTAKE");
   if(_ei){
-    P(`Step 1, expert calibration. Before anything else, write 3–4 lines that define the exact expert best placed to produce this, and then work as that person throughout:`);
+    P(`Expert calibration. In 3–4 lines, define the exact expert best placed to ${REV?"review":IMP?"improve":"produce"} this, then work as that person throughout:`);
     P(`- Job title, seniority and sector (e.g. "Principal RAN architect, 18 years at Tier-1 mobile operators", never "a senior expert")`);
     P(`- The specific projects, decisions or problems they have owned that are relevant here`);
-    P(`- The frameworks, standards, methods, tools and data sources they would rely on for this exact brief, named precisely`);
+    P(`- The frameworks, standards, methods, tools and data sources they would rely on, named precisely`);
     P(`- The 3 things this expert knows about this subject that a generalist would get wrong`);
-    P(`Step 2, domain grounding. List the 5–8 domain-specific facts, benchmarks, terms or constraints this work must reflect to be credible to a practitioner. Use them in the draft.\n`);
+    if(CRE) P(`Then list the 5–8 domain-specific facts, benchmarks, terms or constraints this work must reflect to be credible to a practitioner.\n`);
+    else P("");
   }
-  if(t.general){
-    P(`Start with a context read. In 5–7 short lines, state what you understand:`);
-    P(`- The real goal behind the request (what a great result lets me do), not just the literal ask`);
-    P(`- Domain and sub-domain, and the expertise this needs${t.g.d!==GENERIC_DOMAIN?` (my app detected: ${t.g.d.name}${t.g.d2?` + ${t.g.d2.name}`:""}; correct this if the brief says otherwise)`:""}`);
-    P(`- Task type${t.g.tsk!==GENERIC_TASK?` (detected: ${t.label}; correct it if wrong)`:""}, and the best form for the output`);
-    P(`- Who the output is for and what they already know`);
-    P(`- What "excellent" looks like here: the 3–4 success criteria you will hold the work to`);
-    P(`Then adapt everything below (blueprint, rubric, panel) to that reading. If the brief is a quick or simple ask, keep the output proportionate: the loop improves quality, not length.\n`);
-  }
-  if(o.ask){
-    P(`Before doing anything else, ask me up to 5 questions whose answers would most change the quality of the output (e.g. the decision at stake, facts only I have, politics, what has been tried, constraints). Make them specific to this brief, not generic. Number them. Then STOP and wait for my answers.`);
-    P(`After I answer, list the assumptions you are still making, then continue to Phase 1.`);
+  if(REV||IMP){
+    P(`Inventory the material before judging it. In a few short lines:`);
+    P(`- What it is, its length (${deckish?"number of slides":"pages / sections"}) and its structure`);
+    P(`- Who it is for and what it is trying to achieve (from the material itself)`);
+    P(`- Its main message as currently stated, in one sentence. If you cannot find one, that is finding #1`);
+    P(`- What already works and must be kept`);
+    if(o.ask) P(`Then ask me up to 5 questions that would most change your ${REV?"review":"rewrite"} (audience, the decision at stake, constraints, what is fixed vs changeable). Number them, then STOP and wait.`);
   } else {
-    P(`Do not ask questions. State, in a short list, the 3–6 assumptions you are making about anything the brief leaves open (reader's prior knowledge, the decision at stake, scope boundaries, data available). Choose the assumption that makes the output most useful, then proceed.`);
-    if(o.ei) P(`Use your expert judgement to fill in any context the brief leaves out (scale, timelines, budgets, typical constraints in this domain) rather than leaving it open.`);
-  }
-
-  if(o.think){
-    H("5. PHASE 1 — THINK BEFORE YOU WRITE");
-    P(`Produce these, briefly, before any ${t.isCode?"code":"prose"}:`);
     if(t.general){
-      P(`a) Core answer or objective: in one sentence, the main point, solution or outcome the work must deliver.`);
-      P(`b) Approach: how you will tackle it, and the main alternative you rejected and why.`);
-      P(`c) Structure: the parts of the output mapped to the blueprint below.`);
-      P(`d) Where this is most likely to go wrong (errors, gaps, generic answers), and how you will prevent it.`);
-      P(`e) Expert edge: the one insight, catch or technique a seasoned ${t.g.d===GENERIC_DOMAIN?(_ei&&intel.topic?"practitioner in this exact area":"expert"):t.g.d.name.toLowerCase()+" practitioner"} would add that a generalist would miss.`);
+      P(`Start with a context read. In 5–7 short lines, state what you understand:`);
+      P(`- The real goal behind the request (what a great result lets me do), not just the literal ask`);
+      P(`- Domain and sub-domain, and the expertise this needs${t.g.d!==GENERIC_DOMAIN?` (my app detected: ${t.g.d.name}${t.g.d2?` + ${t.g.d2.name}`:""}; correct this if the brief says otherwise)`:""}`);
+      P(`- Task type${t.g.tsk!==GENERIC_TASK?` (detected: ${t.label}; correct it if wrong)`:""}, and the best form for the output`);
+      P(`- Who the output is for and what they already know`);
+      P(`- What "excellent" looks like here: the 3–4 success criteria you will hold the work to`);
+      P(`Then adapt everything below to that reading. If the brief is a quick or simple ask, keep the output proportionate: the loop improves quality, not length.\n`);
+    }
+    if(o.ask){
+      P(`Before doing anything else, ask me up to 5 questions whose answers would most change the quality of the output (the decision at stake, facts only I have, politics, what has been tried, constraints). Make them specific to this brief. Number them. Then STOP and wait for my answers. After I answer, list the assumptions you are still making, then continue.`);
     } else {
-    P(`a) Governing thought: the single sentence the reader must accept by the end. It must be specific and arguable. If a sensible person couldn't disagree with it, sharpen it.`);
-    P(`b) SCQA: Situation, Complication, Question, Answer, one line each.`);
-    P(`c) Issue tree: the 3–5 supporting points (MECE) that together prove the governing thought, each with the evidence it will need.`);
-    P(`d) The reader's three strongest objections, and where the document will answer each.`);
-    P(`e) Skeleton: the section${isDeck(state.type)?" / slide action-title":""} list mapped to the blueprint below.`);
-    P(`f) Insight check: name the one idea in this ${t.label} that the reader is unlikely to have seen elsewhere. If there isn't one, find one before drafting.`);
+      P(`Do not ask questions. State, in a short list, the 3–6 assumptions you are making about anything the brief leaves open. Choose the assumption that makes the output most useful, then proceed.`);
+      if(o.ei) P(`Use your expert judgement to fill in any context the brief leaves out (scale, timelines, budgets, typical constraints in this domain) rather than leaving it open.`);
     }
   }
 
-  H(`${o.think?6:5}. BLUEPRINT — ${t.label.toUpperCase()}`);
-  if(t.general) P(`Starting structure for this kind of task. Adjust it to what your context read found.`);
-  P(`Use this structure unless the brief clearly needs something different (if you deviate, say why in one line):`);
+  // ---------- phase 1 thinking
+  if(o.think){
+    if(REV){
+      H("PHASE 1 — READ LIKE THE AUDIENCE, THEN LIKE THE EXPERT");
+      P(`a) First read as the intended reader: in 3 lines, what would they take away, and where would they lose interest or push back?`);
+      if(deckish) P(`b) Titles-only test: list every slide title in order. Do they tell the story on their own? Which are topics rather than claims?`);
+      else P(`b) Skeleton test: list each section's opening sentence in order. Do they carry the argument on their own?`);
+      P(`c) Then read as the expert: check it against the standard below, ${unit} by ${unit}.`);
+      P(`d) Note the single biggest problem, the one that matters more than all the others.`);
+    } else {
+      H(IMP ? "PHASE 1 — DIAGNOSE AND PLAN THE REWRITE" : "PHASE 1 — THINK BEFORE YOU WRITE");
+      if(IMP){
+        P(`a) Score the original against the rubric below, with a one-line reason per score.`);
+        P(`b) The 5–8 changes that would most improve it, ranked by impact (structure first, then evidence, then wording).`);
+        P(`c) What must be kept: content, facts, tone or sections that already work.`);
+        P(`d) The plan for the improved version:`);
+      } else P(`Produce these, briefly, before any ${t.isCode?"code":"prose"}:`);
+      const steps = prof.think || (t.general ? [
+        "Core answer or objective: the main point, solution or outcome the work must deliver",
+        "Approach: how you will tackle it, and the main alternative you rejected and why",
+        "Structure: the parts of the output mapped to the blueprint below",
+        "Where this is most likely to go wrong, and how you will prevent it",
+        `Expert edge: the one insight a seasoned ${t.g.d===GENERIC_DOMAIN?"practitioner":t.g.d.name.toLowerCase()+" practitioner"} would add that a generalist would miss`] : []);
+      steps.forEach((s,i)=>P(IMP ? `   - ${s}` : `${String.fromCharCode(97+i)}) ${s}`));
+    }
+  }
+
+  // ---------- standard / blueprint
+  H(REV ? `THE STANDARD — WHAT A GREAT ${t.label.toUpperCase()} LOOKS LIKE` : `BLUEPRINT — ${t.label.toUpperCase()}`);
+  if(REV) P(`Judge the material against this standard. Missing elements are findings too.`);
+  else if(IMP) P(`Rebuild toward this structure where it helps the material. Keep the author's structure where it already works.`);
+  else { if(t.general) P(`Starting structure for this kind of task. Adjust it to what your context read found.`); P(`Use this structure unless the brief clearly needs something different (if you deviate, say why in one line):`); }
   t.blueprint.forEach((b,i)=>P(`${i+1}. ${b}`));
-  P(`\nExpert techniques to apply:`);
+  P(`\nExpert techniques${REV?" the material should use":" to apply"}:`);
   t.techniques.forEach(x=>P(`- ${x}`));
-  P(`\nFailure modes this type of ${t.general?"work":"document"} usually has (avoid all of them):`);
+  P(`\nCommon failure modes${REV?" to look for":" (avoid all of them)"}:`);
   P(t.anti.map(x=>`- ${x}`).join("\n"));
-  if(o.visual && t.general) P(`\nExhibits: use tables, diagrams or worked examples only where they make the output clearer or more useful. Give each a title that states its takeaway.`);
-  else if(o.visual) P(`\nExhibits: include ${isDeck(state.type)?"a specified visual on every content slide":"2–5 exhibits (tables, frameworks, charts or diagrams) where they carry the argument better than prose"}. Each exhibit has a title that states its takeaway, a type, exactly what it shows, and the data it needs.`);
-  if(o.notes) P(`Speaker notes: 60–120 words per slide, written to be spoken, with the one thing the presenter must land and the likely question from the room.`);
+  if(!REV){
+    if(o.visual && t.general) P(`\nExhibits: use tables, diagrams or worked examples only where they make the output clearer. Give each a title that states its takeaway.`);
+    else if(o.visual && state.type!=="rfpsummary" && state.type!=="storyline") P(`\nExhibits: include ${deckish?"a specified visual on every content slide":"2–5 exhibits (tables, frameworks, charts or diagrams) where they carry the argument better than prose"}. Each exhibit has a title that states its takeaway, a type, exactly what it shows, and the data it needs.`);
+    if(o.notes) P(`Speaker notes: 60–120 words per slide, written to be spoken, with the one thing the presenter must land and the likely question from the room.`);
+  }
 
-  const sec = o.think?7:6;
-  H(`${sec}. PHASE 2 — DRAFT v1`);
-  P(`Write the complete first draft. Full length, full structure, ${o.ei?"no placeholders or blanks of any kind":"no placeholders except data flags"}. Do not hold back effort for later rounds.`);
+  // ---------- phase 2
+  if(REV){
+    H("PHASE 2 — REVIEW v1");
+    P(`Write the complete first review:`);
+    P(`- Score the MATERIAL on every rubric dimension below, each with the evidence (quote or ${unit} number)`);
+    P(`- Findings: every issue you find, each with: # | Location (${unit} number or heading) | Issue | Severity | Why it matters to this reader | Specific fix`);
+    P(`- Severity: CRITICAL = would cause rejection, confusion or a wrong decision; MAJOR = weakens credibility or persuasion; MINOR = polish`);
+    P(`- Where wording is the problem, the fix includes the rewritten text${deckish?". Rewrite every weak slide title as an action title":""}`);
+  } else if(IMP){
+    H("PHASE 2 — IMPROVED VERSION v1");
+    P(`Write the complete improved version, applying the plan from Phase 1. Full length and full structure. Keep the author's facts and intent; never drop important content without saying so.`);
+  } else {
+    H("PHASE 2 — DRAFT v1");
+    P(`${prof.draft || "Write the complete first draft."} Full length, full structure, ${o.ei?"no placeholders or blanks of any kind":"no placeholders except data flags"}. Do not hold back effort for later rounds.`);
+  }
 
-  H(`${sec+1}. SCORING RUBRIC`);
-  P(`Score each dimension 1–10. For each score, quote the weakest passage (or slide title) that justifies it. Be harsh:`);
+  // ---------- rubric
+  H("SCORING RUBRIC");
+  P(REV ? `Score the material 1–10 on each dimension, quoting the weakest passage or ${unit} that justifies the score. Be fair and exact:` : `Score each dimension 1–10. For each score, quote the weakest passage (or ${unit} title) that justifies it. Be harsh:`);
   P(t.isCode ? `- 9–10: a demanding senior engineer would merge it without changes.` : `- 9–10: a demanding senior partner would send it to the client without edits.`);
   P(`- 7–8: good, but a sharp reader would spot generic or weak spots.`);
-  P(`- 5–6: competent and forgettable; reads like it could have been generated.`);
+  P(`- 5–6: competent and forgettable.`);
   P(`- Below 5: wrong, thin or confusing.`);
-  if(!t.rubric) P(`First drafts scoring above 7 on Insight or Human voice are almost always over-scored. Score the draft on the page, not the one you meant to write.`);
-  else P(`First drafts almost always over-score on Correctness and Robustness. Trace the code against at least three edge cases before scoring.`);
-  const rubric = t.rubric ? t.rubric : [
+  if(!REV) P(t.isCode ? `First drafts almost always over-score on correctness. Trace the code against at least three edge cases before scoring.` : `First drafts are almost always over-scored. Score what is on the page, not what you meant to write.`);
+  const rubric = prof.rubric || t.rubric || [
     ["Insight","Says something non-obvious and specific; the reader learns something"],
-    ["Logic and structure","One governing thought, MECE support, the most persuasive order"],
+    ["Logic and structure","Most important point first; clear, MECE structure"],
     ["Evidence and specificity","Claims supported by numbers, mechanisms, examples; nothing generic"],
     ["Audience fit","Written for this reader's priorities, knowledge and decision"],
     ["Actionability","Clear implications, next steps or decisions"],
     ["Human voice","Reads like a specific expert wrote it; zero AI tells"],
     ["Concision","Nothing to cut; every sentence earns its place"],
-    ...t.extraCriteria
+    ...(t.extraCriteria||[])
   ];
-  rubric.forEach(([n,d])=>P(`- ${n}: ${d}`));
-  P(`\nExit rule: the loop ends early only if EVERY dimension scores ≥ ${bar}. Otherwise run all ${rounds} round${rounds>1?"s":""}.`);
+  rubric.forEach(([nm,d])=>P(`- ${nm}: ${d}`));
+  if(REV) P(`\nAlso judge your own review each round: Is it complete? Is every finding located and specific? Are fixes concrete? Is it prioritised?`);
+  else P(`\nExit rule: the loop ends early only if EVERY dimension scores ≥ ${bar}. Otherwise run all ${rounds} round${rounds>1?"s":""}.`);
 
-  H(`${sec+2}. CRITIQUE PANEL`);
-  P(`Each of these readers attacks the draft. Write their objections in their voice, specific to the text (quote it). No praise; only what would make them reject, doubt or ignore it:`);
+  // ---------- panel
+  H(REV ? "REVIEW PANEL" : "CRITIQUE PANEL");
+  P(REV ? `Read the material as each of these people. Write their reactions in their voice, specific to the material (quote it). Then ask: what did my review miss that they would catch?` : `Each of these readers attacks the draft. Write their objections in their voice, specific to the text (quote it). No praise; only what would make them reject, doubt or ignore it:`);
   lenses.forEach(l=>P(`- ${l.name}: ${l.q}`));
 
-  H(`${sec+3}. THE LOOP — ${rounds} ROUND${rounds>1?"S":""}`);
+  // ---------- loop
+  H(`THE LOOP — ${rounds} ROUND${rounds>1?"S":""}`);
   P(`For each round, do these steps in order:`);
-  P(`  A. Score the current draft with the rubric.`);
-  P(`  B. Run the round's focus checks (below), including the critique panel in the round that calls for it.`);
-  P(`  C. Diagnose: list the 3–5 changes that would raise the lowest scores the most. Be concrete ("Replace section 3's opening with the 14% churn example", not "improve flow").`);
-  P(`  D. Rewrite the full draft applying every change. Do not patch; rewrite whole sections where needed. Do not lose earlier gains.`);
-  P(`  E. Change log: 3–6 bullets on what changed and why.`);
-  plan.forEach((f,i)=>{
-    P(`\nROUND ${i+1} — focus: ${f.map(x=>FOCI[x].name).join(" + ")}`);
-    f.forEach(x=>FOCI[x].checks.forEach(c=>P(`  - ${c}`)));
-    if(i===0 && rounds>1) P(`  - Also check: does each section open with its conclusion?`);
-  });
-  if(mode==="interactive"){
-    P(`\nINTERACTIVE MODE: at the end of EACH round, show the scores, the change log and the revised draft, then STOP and ask me: "Continue, or give me direction for the next round?" Treat my feedback as the top priority for the next round. If I reply "continue", run the next round as planned.`);
+  if(REV){
+    P(`  A. Run the round's focus checks (below) against the material and your current review.`);
+    P(`  B. List what the review missed, got wrong, or left vague.`);
+    P(`  C. Rewrite the full review: add missing findings, sharpen locations and fixes, correct severities. Do not lose earlier findings.`);
+    P(`  D. Change log: 3–6 bullets on what changed in the review.`);
+  } else {
+    P(`  A. Score the current ${IMP?"version":"draft"} with the rubric.`);
+    P(`  B. Run the round's focus checks (below), including the critique panel in the round that calls for it.`);
+    P(`  C. Diagnose: list the 3–5 changes that would raise the lowest scores the most. Be concrete ("Replace ${unit} 3's opening with the 14% churn example", not "improve flow").`);
+    P(`  D. Rewrite the full ${IMP?"version":"draft"} applying every change. Do not patch; rewrite whole ${unit}s where needed. Do not lose earlier gains${IMP?" or the author's good material":""}.`);
+    P(`  E. Change log: 3–6 bullets on what changed and why.`);
   }
+  plan.forEach((idxs,i)=>{
+    P(`\nROUND ${i+1} — focus: ${idxs.map(x=>foci[x][0]).join(" + ")}`);
+    idxs.forEach(x=>foci[x][1].forEach(c=>P(`  - ${c}`)));
+  });
+  if(mode==="interactive") P(`\nINTERACTIVE MODE: at the end of EACH round, show the ${REV?"updated findings and change log":"scores, the change log and the revised version"}, then STOP and ask me: "Continue, or give me direction for the next round?" Treat my feedback as the top priority for the next round. If I reply "continue", run the next round as planned.`);
 
-  if(o.human){
-    H(`${sec+4}. HUMAN VOICE RULES (non-negotiable, checked every round)`);
+  // ---------- voice rules
+  if(o.human && state.type!=="rfpsummary"){
+    H(REV ? "HUMAN VOICE RULES (for every rewrite you suggest, and for judging the material)" : "HUMAN VOICE RULES (non-negotiable, checked every round)");
     if(t.isCode) P(`These apply to all prose: explanations, comments, docs. Code itself follows the conventions of its language.`);
+    if(REV) P(`Flag AI-sounding or generic language in the material as findings, and make sure your suggested rewrites follow these rules.`);
     P(`Write like a person who has done the work:`);
     P(`- Concrete over abstract: named systems, real roles, numbers with units, specific examples.`);
     P(`- Plain verbs: use, build, cut, cost, show, fix, break, decide.`);
-    P(`- Vary rhythm on purpose. A short sentence lands a point. A longer one carries the reasoning that gets the reader there, with the qualifications a real expert would add.`);
-    P(`- Commit to positions and give the reason. Hedge only where the uncertainty is real, and say what it depends on.`);
-    P(`- Start paragraphs with the point. Let some paragraphs be one sentence.`);
-    P(`- Use bullets only for genuinely parallel items. Arguments go in prose.`);
-    P(`- Include at least one observation that only someone close to this work would make (a practical catch, a common mistake, a number that surprises).`);
+    P(`- Vary rhythm on purpose. A short sentence lands a point. A longer one carries the reasoning, with the qualifications a real expert would add.`);
+    P(`- Commit to positions and give the reason. Hedge only where the uncertainty is real.`);
+    P(`- Start paragraphs with the point. Use bullets only for genuinely parallel items.`);
     P(`\nBanned words and phrases (rewrite the sentence, don't just swap a synonym):`);
     P(BANNED_WORDS.join(", "));
     P(`\nBanned patterns:`);
     BANNED_PATTERNS.forEach(x=>P(`- ${x}`));
+  } else if(state.type==="rfpsummary"){
+    H("WRITING RULES");
+    P(`Plain, precise and scannable. Short lines, tables, no persuasion language, no filler. The goal is accuracy and speed of use, not style.`);
   }
 
+  // ---------- evidence
   if(o.evidence){
-    H(`${sec+(o.human?5:4)}. EVIDENCE RULES`);
-    P(`- Never invent statistics, quotes, client names, case studies or sources.`);
-    if(t.isCode) P(`- Never invent library functions, parameters or API endpoints. If unsure a function exists in the version used, say so and mark [VERIFY].`);
-    if(o.ei){
-      P(`- Do not leave blanks, gaps or 'data needed' style placeholders. Where a figure, fact or detail is missing, fill it using your best expert judgement, in this order of preference: (1) my material; (2) reliable knowledge you can attribute to a named source; (3) published industry benchmarks or typical ranges; (4) a reasoned estimate built from stated assumptions.`);
-      P(`- Write estimates naturally into the text, in the way a senior expert would ("typically 15–20% for Tier-1 operators", "we assume roughly 2,000 sites"). Use ranges where precision would be false. Keep every estimate realistic and internally consistent across the document.`);
-      P(`- Never fabricate quotes, named client results or citations to specific reports you are not confident exist. Use benchmarks and reasoning instead.`);
+    H("EVIDENCE RULES");
+    if(REV){
+      P(`- Base every finding on what is actually in the material; quote it or cite the ${unit}.`);
+      P(`- Never invent content you could not see. If part of the material was unreadable, say so.`);
+      P(`- When you suggest adding data or proof, say exactly what and where it could come from${o.ei?", and give a realistic benchmark or estimate the author could use":""}.`);
     } else {
-      P(`- When a number is needed and you don't have it from my material or reliable knowledge, write [DATA NEEDED: what figure, likely source]. Or give a clearly labelled estimate with the method shown ("Illustrative: 2,000 sites × 3.5 kW × …").`);
-      P(`- Mark anything recalled from memory that I should check with [VERIFY].`);
+      P(`- Never invent statistics, quotes, client names, case studies or sources.`);
+      if(t.isCode) P(`- Never invent library functions, parameters or API endpoints. If unsure a function exists in the version used, say so and mark [VERIFY].`);
+      if(state.type==="rfpsummary"){
+        P(`- Use only what the RFP says. Cite the section or page for every requirement, date and term. Mark anything not specified as [NOT IN RFP]. Label your interpretations as such.`);
+      } else if(o.ei){
+        P(`- Do not leave blanks, gaps or 'data needed' style placeholders. Where a figure, fact or detail is missing, fill it using your best expert judgement, in this order: (1) my material; (2) reliable knowledge you can attribute to a named source; (3) industry benchmarks or typical ranges; (4) a reasoned estimate from stated assumptions.`);
+        P(`- Write estimates naturally, as a senior expert would ("typically 15–20% for Tier-1 operators"). Use ranges where precision would be false. Keep estimates realistic and consistent.`);
+        P(`- Never fabricate quotes, named client results or citations to specific reports you are not confident exist.`);
+      } else {
+        P(`- When a number is needed and you don't have it, write [DATA NEEDED: what figure, likely source], or give a clearly labelled estimate with the method shown.`);
+        P(`- Mark anything recalled from memory that I should check with [VERIFY].`);
+      }
+      P(`- Separate fact, estimate and opinion in the wording itself.`);
+      if(IMP) P(`- Keep every fact from the original unless it is wrong; if you change or remove one, say so in the change table.`);
     }
-    P(`- Separate fact, estimate and opinion in the wording itself.`);
-    P(`- Name standards, frameworks and sources precisely (body, document, year) when you cite them.`);
   }
 
-  const last = sec+(o.human?1:0)+(o.evidence?1:0)+4;
-  H(`${last}. OUTPUT FORMAT`);
-  if(vis==="full") P(`Show everything: Phase 0 assumptions${o.think?", Phase 1 thinking":""}, Draft v1, then for every round the scores table, panel critique, diagnosis, change log and full revised draft. End with the FINAL version.`);
-  else if(vis==="compact") P(`Show: Phase 0 assumptions${o.think?" and the governing thought + skeleton from Phase 1":""}. For each round show ONLY a compact scores table (dimension | score | weakest passage), the top panel objections in one line each, and the change log. Run the full drafts internally but do not print the intermediate versions. Then print the FINAL version in full.`);
-  else P(`Do all phases and rounds fully, but print only: a one-line note per round (round, lowest score, main fix), then the FINAL version in full.`);
-  P(`\nFINAL version format:`);
-  P(t.format);
-  P(`\nAfter the FINAL version, add:`);
-  P(`1. Final scores table, with one line on what would push each score higher.`);
-  if(o.evidence) P(o.ei ? `2. Assumptions and estimates: a short table (Item | Value used | Basis: source, benchmark or calculation | Confidence: high/medium/low), so I can check the key figures quickly.` : `2. Open items: every [DATA NEEDED] and [VERIFY] in one list, so I can close them.`);
-  P(`${o.evidence?3:2}. The two questions this audience is most likely to ask, with crisp answers.`);
+  // ---------- output
+  H("OUTPUT FORMAT");
+  if(REV){
+    if(vis==="full") P(`Show Phase 0, Phase 1, Review v1, and each round's change log and full updated review. End with the FINAL review.`);
+    else if(vis==="compact") P(`Show Phase 0 briefly and one line per round (what the round added). Then print the FINAL review in full.`);
+    else P(`Print only the FINAL review.`);
+    P(`\nFINAL review format:`);
+    P(`1. Verdict: overall score /10; readiness (Ready / Ready with fixes / Needs rework); a 3–4 sentence assessment; what works and must be kept.`);
+    P(`2. Scorecard table: Dimension | Score | Evidence (quote or ${unit}).`);
+    P(`3. Top 5 changes, ranked by impact, each one line.`);
+    P(`4. Detailed findings table, in ${unit} order: # | ${deckish?"Slide":"Section"} | Issue | Severity | Fix.`);
+    P(`5. Rewrites: before → after for the weakest ${deckish?"slide titles and on-slide text":"headings and passages"}.`);
+    P(`6. Structure: if the order or storyline should change, the proposed new ${deckish?"slide order with action titles":"outline"}. Otherwise say it is sound.`);
+    P(`\nOffer at the end, in one line, to produce the improved version.`);
+  } else {
+    if(vis==="full") P(`Show everything: Phase 0${o.think?", Phase 1":""}, version 1, then for every round the scores, panel critique, diagnosis, change log and full revised version. End with the FINAL version.`);
+    else if(vis==="compact") P(`Show: Phase 0${o.think?" and the key points of Phase 1":""}. For each round show ONLY a compact scores table (dimension | score | weakest passage), the top panel objections in one line each, and the change log. Run the full drafts internally but do not print intermediate versions. Then print the FINAL version in full.`);
+    else P(`Do all phases and rounds fully, but print only: a one-line note per round (round, lowest score, main fix), then the FINAL version in full.`);
+    if(IMP) P(`\nStart the final output with: a before/after scores table (Dimension | Original | Improved), and the 5 most important changes in one line each.`);
+    P(`\nFINAL version format:`);
+    P(t.format);
+    P(`\nAfter the FINAL version, add:`);
+    let k=1;
+    P(`${k++}. Final scores table, with one line on what would push each score higher.`);
+    if(IMP) P(`${k++}. Change table: ${deckish?"Slide":"Section"} | What changed | Why. Note any content removed.`);
+    if(o.evidence && state.type!=="rfpsummary") P(`${k++}. ${o.ei ? "Assumptions and estimates: Item | Value used | Basis | Confidence (high/medium/low)." : "Open items: every [DATA NEEDED] and [VERIFY] in one list, so I can close them."}`);
+    if(!t.isCode) P(`${k++}. The two questions this audience is most likely to ask, with crisp answers.`);
+  }
 
-  H(`${last+1}. LAST CHECK BEFORE YOU PRINT THE FINAL`);
+  // ---------- final check
+  H(REV ? "LAST CHECK BEFORE YOU PRINT THE FINAL REVIEW" : "LAST CHECK BEFORE YOU PRINT THE FINAL");
   P(`Confirm silently, and fix anything that fails:`);
-  [
-    "The governing thought is stated early and everything supports it",
-    isDeck(state.type)?"Action titles alone tell the full story":t.general?"The most important point or result comes first":"Section openings alone tell the full story",
-    t.isCode?"The code runs as given and handles the edge cases named in Phase 1":"No paragraph could be pasted into a document about a different topic unchanged",
-    o.human?"Zero banned words or patterns; sentence lengths visibly vary":"Language is plain and specific",
-    o.evidence?(o.ei?"No blanks or placeholders; every estimate is realistic, consistent and listed in the assumptions table":"No invented facts; every gap is flagged"):"Claims are supported",
-    "The reader knows exactly what to do or decide next",
-    `It fits the size: ${size}`
-  ].forEach(x=>P(`[ ] ${x}`));
+  const checks = REV ? [
+    `Every ${unit} of the material was reviewed`,
+    "Every finding has a location, a severity and a concrete fix",
+    "Critical issues come first; the top 5 changes are ranked by impact",
+    "What works is named, so the author keeps it",
+    "No finding is about content you could not actually see"
+  ] : [
+    ...(prof.final || [
+      t.general?"The most important point or result comes first":"Section openings alone tell the full story",
+      t.isCode?"The code runs as given and handles the edge cases named in Phase 1":"No paragraph could be pasted into a document about a different topic unchanged",
+      "The reader knows exactly what to do or decide next"]),
+    ...(o.human && state.type!=="rfpsummary" ? ["Zero banned words or patterns; sentence lengths visibly vary"] : []),
+    ...(o.evidence && state.type!=="rfpsummary" ? [o.ei?"No blanks or placeholders; every estimate is realistic and listed in the assumptions table":"No invented facts; every gap is flagged"] : []),
+    ...(IMP ? ["Everything that worked in the original is still there"] : []),
+    ...(CRE ? [`It fits the size: ${size}`] : [])
+  ];
+  checks.forEach(x=>P(`[ ] ${x}`));
   P(`\nBegin with Phase 0.`);
   let out = L.join("\n");
-  if(o.ei) out = out.replace(/a \[DATA NEEDED\] flag/g, "a realistic expert estimate (benchmark or reasoned calculation)").replace(/\[DATA NEEDED\]/g, "'Estimate — see assumptions table'");
+  if(o.ei && !REV && state.type!=="rfpsummary") out = out.replace(/a \[DATA NEEDED\] flag/g, "a realistic expert estimate").replace(/\[DATA NEEDED\]/g, "'Estimate — see assumptions table'");
   return out;
 }
 
@@ -1386,7 +1702,7 @@ function generate(){
   lastOutput = build();
   $("out").innerHTML = highlight(lastOutput);
   const w = lastOutput.split(/\s+/).length;
-  $("stats").textContent = `${w.toLocaleString()} words · ~${Math.round(lastOutput.length/4).toLocaleString()} tokens · ${TYPES[state.type].label} · ${$("rounds").value} rounds · ${state.mode==="auto"?"autonomous":"interactive"}`;
+  $("stats").textContent = `${({create:'Create',review:'Review',improve:'Improve'})[state.type==='rfpsummary'?'create':state.work]} · ${w.toLocaleString()} words · ~${Math.round(lastOutput.length/4).toLocaleString()} tokens · ${TYPES[state.type].label} · ${$("rounds").value} rounds · ${state.mode==="auto"?"autonomous":"interactive"}`;
   if(window.innerWidth<900) document.querySelector(".col.right").scrollIntoView({behavior:"smooth"});
 }
 $("genBtn").onclick = generate;
@@ -1416,10 +1732,10 @@ function snapshot(){
   const ids=["raw","size","purpose","audience","audienceCustom","industry","voice","spelling","context","must","avoid","rounds","bar","visibility"];
   const f={}; ids.forEach(i=>f[i]=$(i).value);
   ["optEI","optHuman","optEvidence","optThink","optVisual","optAsk","optNotes"].forEach(i=>f[i]=$(i).checked);
-  return {f, type:state.type, mode:state.mode, lenses:[...state.lenses], out:lastOutput, at:new Date().toISOString()};
+  return {f, type:state.type, work:state.work, mode:state.mode, lenses:[...state.lenses], out:lastOutput, at:new Date().toISOString()};
 }
 function restore(s){
-  state.manualType=true; state.lockedOn=bestType(s.f.raw||""); setType(s.type); state.lenses=new Set(s.lenses); state.mode=s.mode;
+  state.manualType=true; state.lockedOn=bestType(s.f.raw||""); setType(s.type); if(s.work){ state.manualWork=true; setWork(s.work); } state.lenses=new Set(s.lenses); state.mode=s.mode;
   Object.entries(s.f).forEach(([k,v])=>{ const el=$(k); if(!el) return; if(typeof v==="boolean") el.checked=v; else el.value=v; });
   $("audienceCustom").classList.toggle("hidden",$("audience").value!=="custom");
   $("modeChips").querySelectorAll(".chip").forEach(c=>c.classList.toggle("on",c.dataset.v===s.mode));
